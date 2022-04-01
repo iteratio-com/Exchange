@@ -1,0 +1,12 @@
+title: Monitor the systemtime of a SNMP-Device 
+agents: snmp
+catalog: os/misc
+license: GPLv2
+distribution: check_mk
+description:
+ This plugin monitors the systemtime of a SNMP-Device. It calculates the time offset between the SNMP-Device and the current time of Check_MK server it runs on. You can configure the offset for WARN/CRIT events via WATO-Rules.
+ Please consider that the time offset is calculated when the SNMP response packet is arrived at Check_MK server, thus long SNMP response times might be a problem! 
+
+perfdata:
+ The offset between the time of the SNMP-Walk and Host-Time
+

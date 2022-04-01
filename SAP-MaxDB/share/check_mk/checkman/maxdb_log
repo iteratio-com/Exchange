@@ -1,0 +1,17 @@
+title: SAP MaxDB: Log Pages
+agents: linux
+catalog: app/maxdb
+license: GPL
+distribution: check_mk
+description:
+ Similar to the data check, this check checks the use of the log pages and their size.
+ Thresholds can be configured through setup, default is 80/90 percent for WARN/CRIT.
+
+ The agent plugin MaxDB is required for this check.
+
+item:
+ Database
+
+discovery:
+ One service is created for each Database
+

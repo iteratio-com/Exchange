@@ -1,0 +1,20 @@
+title: SAP MaxDB: State
+agents: linux
+catalog: app/maxdb
+license: GPL
+distribution: check_mk
+description:
+ This check checks the status of the database. If it is in "Offline" there is a CRIT, "Cold" and "Admin" give a WARN.
+ In addition, this check reflects the currently running database version.
+ If the "Data/Log usage" query is also executed in the plugin, there is also a check here whether the "AutoSaveStandby" option is switched on. If this is OFF then the status will be set from the rule, default for it is OK.
+
+ In addition, this check also gives information for the HW/SW inventory.
+
+ The agent plugin MaxDB is required for this check.
+
+item:
+ Database
+
+discovery:
+ One service is created for each Database
+

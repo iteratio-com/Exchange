@@ -1,0 +1,16 @@
+title: SAP MaxDB: User Sessions
+agents: linux
+catalog: app/maxdb
+license: GPL
+distribution: check_mk
+description:
+ This check checks the capacity utilization of the active users. Threshold values can be set for the absolute and relative threshold values. Default is 80/90 percent utilization for WARN/CRIT.
+
+ The agent plugin MaxDB is required for this check.
+
+item:
+ Database
+
+discovery:
+ One service is created for each Database
+
