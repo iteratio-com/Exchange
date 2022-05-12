@@ -25,7 +25,7 @@ def _parameter_valuespec_maxdb_sessions():
             (
                 "levels_abs",
                 Tuple(
-                    title=_("Absolut Levels on Active Sessions"),
+                    title=_("Absolut Levels on active sessions"),
                     help=_("Specify the threshold values for the absolute number of active sessions here"),
                     elements=[
                         Integer(title=_("Warning at"),),
@@ -36,7 +36,7 @@ def _parameter_valuespec_maxdb_sessions():
             (
                 "levels_perc",
                 Tuple(
-                    title=_("Session Usage Levels"),
+                    title=_("Session usage levels"),
                     help=_("Set here your limits on Sessions Usage (from Max User Sessions)"),
                     elements=[
                         Percentage(title=_("Warning at"), default_value=80),
@@ -56,7 +56,7 @@ rulespec_registry.register(
         item_spec=lambda: TextInput(title=_("DataBase"), help=_("Name of the Database")),
         match_type="dict",
         parameter_valuespec=_parameter_valuespec_maxdb_sessions,
-        title=lambda: _("SAP MaxDB Sessions"),
+        title=lambda: _("SAP-MaxDB Sessions"),
     ))
 
 max_db_size_elements = [(
@@ -98,7 +98,7 @@ rulespec_registry.register(
         item_spec=lambda: TextInput(title=_("DataBase"), help=_("Name of the Database")),
         match_type="dict",
         parameter_valuespec=_parameter_valuespec_maxdb_log,
-        title=lambda: _("SAP MaxDB LOG Sizes"),
+        title=lambda: _("SAP-MaxDB LOG Sizes"),
     ))
 
 rulespec_registry.register(
@@ -108,7 +108,7 @@ rulespec_registry.register(
         item_spec=lambda: TextInput(title=_("DataBase"), help=_("Name of the Database")),
         match_type="dict",
         parameter_valuespec=_parameter_valuespec_maxdb_log,
-        title=lambda: _("SAP MaxDB LOG Sizes"),
+        title=lambda: _("SAP-MaxDB LOG Sizes"),
     ))
 
 
@@ -131,7 +131,7 @@ rulespec_registry.register(
         item_spec=lambda: TextInput(title=_("DataBase"), help=_("Name of the Database")),
         match_type="dict",
         parameter_valuespec=_parameter_valuespec_maxdb_database,
-        title=lambda: _("SAP MaxDB Database Sizes"),
+        title=lambda: _("SAP-MaxDB Database Sizes"),
     ))
 
 
@@ -157,7 +157,7 @@ rulespec_registry.register(
         item_spec=lambda: TextInput(title=_("DataBase"), help=_("Name of the Database")),
         match_type="dict",
         parameter_valuespec=_parameter_valuespec_maxdb_settings,
-        title=lambda: _("SAP MaxDB Database Settings"),
+        title=lambda: _("SAP-MaxDB Database Settings"),
     ))
 
 
@@ -198,5 +198,5 @@ rulespec_registry.register(
         item_spec=lambda: TextInput(title=_("DataBase"), help=_("Name of the Database")),
         match_type="dict",
         parameter_valuespec=_parameter_valuespec_maxdb_backup,
-        title=lambda: _("SAP MaxDB Backup"),
+        title=lambda: _("SAP-MaxDB Backup"),
     ))
