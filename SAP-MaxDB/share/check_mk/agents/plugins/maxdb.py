@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
 import sys
 import subprocess
 import configparser
@@ -54,7 +55,7 @@ def main():
     for key, value in config.items():
         run_checks = eval(value.get('modules', "['state']"))
         cmd = value.get('cmd_tool', f'/sapdb/{key}/db/bin/dbmcli')
-        if not cmd.endswith("db/bin/dbmcli"):
+        if not re.search(r"^\/[a-zA-Z_0-9_.-\/]*\/bin\/dbmcli$", cmd):
             print(f"Stop Plugin, hence {cmd} does not endswith 'dbmcli'")
             sys.exit(2)
         cmd_line = [
