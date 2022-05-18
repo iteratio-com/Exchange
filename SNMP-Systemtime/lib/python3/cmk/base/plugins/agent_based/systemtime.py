@@ -50,15 +50,16 @@ def parse_snmp_systemtime(string_table):
     real_utc = False
     if len(octet_string) == 11:
         output_string = "%04d-%02d-%02d %02d:%02d:%02d, %s%02d:%02d" % (
-            ((ord(octet_string[0]) * 16**2) + ord(octet_string[1])), ord(octet_string[2]),
-            ord(octet_string[3]), ord(octet_string[4]), ord(octet_string[5]), ord(
-                octet_string[6]), octet_string[8], ord(octet_string[9]), ord(octet_string[10]))
+            ((ord(octet_string[0]) * 16**2) + ord(octet_string[1])),
+            ord(octet_string[2]), ord(octet_string[3]), ord(octet_string[4]),
+            ord(octet_string[5]), ord(octet_string[6]), octet_string[8],
+            ord(octet_string[9]), ord(octet_string[10]))
         real_utc = True
     elif len(octet_string) < 11:
-        output_string = "%04d-%02d-%02d %02d:%02d:%02d.%02d, +00:00" % ((
-            (ord(octet_string[0]) * 16**2) + ord(octet_string[1])), ord(
-                octet_string[2]), ord(octet_string[3]), ord(octet_string[4]), ord(
-                    octet_string[5]), ord(octet_string[6]), ord(octet_string[7]))
+        output_string = "%04d-%02d-%02d %02d:%02d:%02d.%02d, +00:00" % (
+            ((ord(octet_string[0]) * 16**2) + ord(octet_string[1])),
+            ord(octet_string[2]), ord(octet_string[3]), ord(octet_string[4]),
+            ord(octet_string[5]), ord(octet_string[6]), ord(octet_string[7]))
     else:
         return
     diff = 0
@@ -71,7 +72,11 @@ def parse_snmp_systemtime(string_table):
     now = datetime.datetime.utcnow()
     now = int(time.mktime(datetime.datetime.utctimetuple(now)))
     delta_time = now - snmp_time
-    parsed = {'delta': delta_time, 'snmp_time': snmp_time, 'out_string': output_string}
+    parsed = {
+        'delta': delta_time,
+        'snmp_time': snmp_time,
+        'out_string': output_string.replace(',', '')
+    }
     return parsed
 
 
@@ -97,7 +102,7 @@ def check_snmp_system_time_offset(params, section):
         return
 
     yield Result(state=State.OK,
-                 summary=f"Time from Device: {section.get('out_string').replace(',','')}")
+                 summary=f"Time from Device: {section.get('out_string')}")
 
     yield from check_levels(
         section.get('delta'),
