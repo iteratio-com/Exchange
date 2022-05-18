@@ -56,10 +56,10 @@ def main():
         run_checks = eval(value.get('modules', "['state']"))
         cmd = value.get('cmd_tool', f'/sapdb/{key}/db/bin/dbmcli')
         if not re.search(r"^\/[a-zA-Z_0-9_.-\/]*\/bin\/dbmcli$", cmd):
-            print(f"Stop Plugin, hence {cmd} does not endswith 'dbmcli'")
+            print(f"Stop Plugin, hence {cmd} does not match Regex")
             sys.exit(2)
         cmd_line = [
-            value.get('cmd_tool', f'/sapdb/{key}/db/bin/dbmcli'), f'-d {key}',
+            cmd, f'-d {key}',
             f"-u {value.get('user')},{value.get('password')}"
         ]
         for check, queries in known_querys.items():
