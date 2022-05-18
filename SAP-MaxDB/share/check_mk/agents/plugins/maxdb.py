@@ -8,8 +8,11 @@ import configparser
 
 
 def run_query(cmd, query, dbname, query_timeout=20):
-    total_cmd = cmd + query
-    result = subprocess.run(total_cmd, shell=True, stdout=subprocess.PIPE, timeout=query_timeout)
+    total_cmd = cmd + query if query else cmd
+    result = subprocess.run(total_cmd,
+                            shell=False,
+                            stdout=subprocess.PIPE,
+                            timeout=query_timeout)
     if result.stderr:
         print(result.stderr.decode('utf-8'))
     return result.stdout.decode('utf-8')
@@ -39,7 +42,8 @@ def main():
     config = parse_config_file()
     known_querys = {
         'state': ['db_state'],
-        'backup:sep(124)': ['backup_history_list -c LABEL,ACTION,START,STOP,RC,ERROR -I'],
+        'backup:sep(124)':
+        ['backup_history_list -c LABEL,ACTION,START,STOP,RC,ERROR -I'],
         'data:sep(61)': [
             "sql_executenice SELECT A.USEDSIZE,A.USABLESIZE,S.USED_LOG_PAGES*D.PAGESIZE_IN_KB,"
             "S.USED_LOG_PAGES,D.ACTIVE_SESSIONS,D.DATACACHE_HITRATE,S.LOG_PAGES*D.PAGESIZE_IN_KB,"
@@ -49,8 +53,14 @@ def main():
     }
     for key, value in config.items():
         run_checks = eval(value.get('modules', "['state']"))
-        cmd_line = value.get('cmd_tool', f'/sapdb/{key}/db/bin/dbmcli')
-        cmd_line += f" -d {key} -u {value.get('user')},{value.get('password')} "
+        cmd = value.get('cmd_tool', f'/sapdb/{key}/db/bin/dbmcli')
+        if not cmd.endswith("db/bin/dbmcli"):
+            print(f"Stop Plugin, hence {cmd} does not endswith 'dbmcli'")
+            sys.exit(2)
+        cmd_line = [
+            value.get('cmd_tool', f'/sapdb/{key}/db/bin/dbmcli'), f'-d {key}',
+            f"-u {value.get('user')},{value.get('password')}"
+        ]
         for check, queries in known_querys.items():
             if check in run_checks:
                 print(f"<<<maxdb_{check}>>>")
@@ -58,15 +68,17 @@ def main():
                 for query in queries:
                     print(
                         run_query(cmd=cmd_line,
-                                  query=query,
+                                  query=[query],
                                   dbname=key,
-                                  query_timeout=int(value.get('timeout', '20'))))
+                                  query_timeout=int(value.get('timeout',
+                                                              '20'))))
                 if check == 'state':
                     print(
-                        run_query(cmd="/sapdb/programs/bin/sdbregview -l",
+                        run_query(cmd=["/sapdb/programs/bin/sdbregview", "-l"],
                                   query="",
                                   dbname=key,
-                                  query_timeout=int(value.get('timeout', '20'))))
+                                  query_timeout=int(value.get('timeout',
+                                                              '20'))))
 
 
 if __name__ == "__main__":
