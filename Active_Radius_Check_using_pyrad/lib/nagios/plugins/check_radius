@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+###############################################################################
+# Nagios plugin to check radius server (on windows AD DC)
+#
+# Notes
+# requires pyrad python library https://pypi.python.org/pypi/pyrad
+# Copy dictionary file from examples
+#
+###############################################################################
+
+from pyrad.client import Client, Timeout
+from pyrad.dictionary import Dictionary
+from pyrad.packet import AccessAccept, AccessRequest
+import os
+import sys
+import logging as log
+import socket
+import argparse
+
+import cmk.utils.password_store
+cmk.utils.password_store.replace_passwords()
+
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument(
+        "-H",
+        "--hostname",
+        required=True,
+        help=("Defines Radius Server."),
+    )
+    parser.add_argument(
+        "-u",
+        "--user",
+        default=None,
+        required=True,
+        help="Username for login",
+    )
+    parser.add_argument(
+        "-s",
+        "--secret",
+        default=None,
+        required=True,
+        help="Password for login",
+    )
+    parser.add_argument(
+        "-p",
+        "--password",
+        default=None,
+        required=True,
+        help="Radius Secret",
+    )
+    parser.add_argument(
+        "-i",
+        "--nasid",
+        default=None,
+        required=True,
+        help="NAS-ID",
+    )
+    parser.add_argument(
+        '-d',
+        '--dictfile',
+        help=
+        'Dictionary File. Use https://raw.githubusercontent.com/wichert/pyrad/master/example/dictionary',
+        default=os.getenv("OMD_ROOT", '~') +
+        '/local/lib/nagios/plugins/dictionary',
+        type=str)
+
+    parser.add_argument(
+        '-t',
+        '--type',
+        help=
+        'NAS Port Type (19=Wireless, 17=Cable, 5=Virtual) see http://freeradius.org/rfc/rfc2865.html#NAS-Identifier',
+        default=19,
+        type=int)
+    parser.add_argument(
+        '--verbose',
+        '-v',
+        action='count',
+        default=0,
+        help='Set verbosity level',
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv):
+    args = parse_args(argv)
+    log.getLogger().setLevel([log.ERROR, log.WARN, log.INFO,
+                              log.DEBUG][args.verbose])
+
+    log.debug(f'Parsed arguments: {args}')
+    log.debug(f'Radius-Server: {args.hostname}')
+    log.debug(f'secret: {args.secret}')
+    log.debug(f'Password: {args.password}')
+    log.debug(f'Username: {args.user}')
+    log.debug(f'NAS-id: {args.nasid}')
+    log.debug(f'type: {args.type}')
+    log.debug(f'dictionaryfile: {args.dictfile}')
+
+    srv = Client(server=args.hostname,
+                 secret=args.secret.encode("utf-8"),
+                 dict=Dictionary(args.dictfile))
+    # create request
+    req = srv.CreateAuthPacket(code=AccessRequest,
+                               User_Name=args.user,
+                               NAS_Identifier=args.nasid)
+    req["User-Password"] = req.PwCrypt(args.password)
+    req["NAS-Port-Type"] = args.type
+    # send request
+    try:
+        log.debug('Sending authentication request')
+        reply = srv.SendPacket(req)
+    except Timeout:
+        gtfo(2, "Error: RADIUS server does not reply")
+    except socket.error as e:
+        gtfo(2, f"Error: Network error: {e}")
+    except Exception as e:
+        gtfo(2, f"Error: Type {type(e)} with Message: {e}")
+
+    if reply.code == AccessAccept:
+        log.debug("Attributes returned by server:")
+        for i in reply:
+            log.debug(f"{i}: {reply[i]}")
+        gtfo(0, "OK access accepted by radius server")
+    else:
+        gtfo(1, "WARN access denied by radius server")
+
+
+def gtfo(exitcode, message=''):
+    log.debug(f'Exiting with status {exitcode}. Message: {message}')
+    if message:
+        print(message)
+    exit(exitcode)
+
+
+if __name__ == '__main__':
+    log.basicConfig(
+        level=log.DEBUG,
+        format='%(asctime)s - %(funcName)s - %(levelname)s - %(message)s')
+    main(sys.argv[1:])
