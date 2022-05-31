@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+
+def check_radius_arguments(params):
+    args = []
+    if 'type' in params:
+        args += ["-t", params['type']]
+    if 'dict' in params:
+        args += ["-d", params['dict']]
+    args += ['-H', "$HOSTADDRESS$"]
+    for i in ("secret", "password", 'user', 'nasid'):
+        if i in params:
+            if i in ["password", "secret"]:
+                args += [f"--{i}", passwordstore_get_cmdline("%s", params[i])]
+            else:
+                args += [f'--{i}', params[i]]
+    return args
+
+
+active_check_info['radius'] = {
+    "command_line": 'check_radius $ARG1$',
+    "argument_function": check_radius_arguments,
+    "service_description": lambda params: params["description"],
+}
