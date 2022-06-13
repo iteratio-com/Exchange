@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+
+def agent_pihole_arguments(params, hostname, ipaddress):
+    args = ['--host', ipaddress]
+    if params.get('address'):
+        args = ['--host', params.get('address', hostname).replace('$HOSTNAME$', hostname)]
+    if params.get('protocol'):
+        args += ['--protocol', params.get('protocol')]
+    if params.get('no-cert-check'):
+        args += ['--no-cert-check']
+    if params.get('timeout'):
+        args += ['--timeout', params.get('timeout')]
+    if params.get('piggyhost'):
+        args += ['--piggyhost', params.get('piggyhost')]
+    if params.get('token'):
+        args += [
+            '--token',
+            passwordstore_get_cmdline("%s", params.get('token'))
+        ]
+    return args
+
+
+special_agent_info['pihole'] = agent_pihole_arguments

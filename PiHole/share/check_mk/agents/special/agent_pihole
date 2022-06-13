@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import argparse
+import sys
+import requests
+import cmk.utils.password_store
+cmk.utils.password_store.replace_passwords()
+
+
+def parse_arguments(argv):
+    parser = argparse.ArgumentParser(description=__doc__)
+    opts_with_help = (
+        ('host', '192.168.178.5', "Hostname"),
+        ('protocol', 'http', "Use HTTP or HTTPs for connect to API"),
+        ('token', None, "API-token"),
+        ('timeout', 10, "Timeout for Response"),
+        ('piggyhost', None, "Give informations piggyback to a different Host"),
+    )
+    for key, default, help_str in opts_with_help:
+        if default is not None:
+            help_str += " Default: %s" % default
+        parser.add_argument("--%s" % key, default=default, help=help_str)
+    parser.add_argument(
+        "--no-cert-check",
+        action="store_true",
+        help="""Skip SSL certificate verification (not recommended)""",
+    )
+    return parser.parse_args(argv)
+
+
+def make_request(args, query):
+    if args.host[-1] == '/':
+        args.host = args.host[:-1]
+    url = f"{args.protocol}://{args.host}{query}&auth="
+    if args.token: url += args.token
+    if args.no_cert_check:
+        requests.packages.urllib3.disable_warnings(
+            category=InsecureRequestWarning)
+    try:
+        response = requests.get(url,
+                                verify=args.no_cert_check,
+                                timeout=args.timeout)
+    except Exception as e:
+        sys.stderr.write("Error: %s\n" % e)
+        sys.exit(1)
+
+    if not response.status_code == requests.codes.ok:
+        sys.stderr.write(
+            f"Wrong status code: {response.status_code}. Expected: {requests.codes.ok}\n"
+        )
+        sys.exit(1)
+    else:
+        try:
+            out = response.json()
+        except:
+            out = response.text
+        print(out)
+
+
+def main(sys_argv=None):
+    args = parse_arguments(sys_argv)
+    if not args.host:
+        print("Hostname is Missing!")
+        sys.exit(2)
+    if args.piggyhost:
+        print(f"<<<<{args.piggyhost}>>>>")
+    known_api_endpoints = {
+        "summary": "/admin/api.php?summaryRaw",
+        "db_size": "/admin/api_db.php?getDBfilesize",
+        "messages": "/admin/api_db.php?messages",
+        "version": "/admin/api.php?versions",
+        "customdns": "/admin/api.php?customdns&action=get",
+        "overdata10mins": "/admin/api.php?overTimeData10mins",
+    }
+
+    for key, value in known_api_endpoints.items():
+        print(f"<<<pihole_{key}:sep(0)>>>")
+        make_request(args, query=value)
+
+    if args.piggyhost:
+        print("<<<<>>>>")
+
+    sys.stdout.write('<<<check_mk>>>\n')
+    sys.stdout.write('Name: PiHole-API-Agent\n')
+    sys.stdout.write('Version: 1.0\n')
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
