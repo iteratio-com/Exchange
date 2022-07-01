@@ -15,6 +15,7 @@ v.0.2.3 make passwordstore work for both secrets...
 
 v.0.2.4 removed unnecessary  stuff
 
+v.0.2.5 add Response Time Performance data
 
 
 
