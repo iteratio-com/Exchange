@@ -22,4 +22,5 @@ active_check_info['radius'] = {
     "command_line": 'check_radius $ARG1$',
     "argument_function": check_radius_arguments,
     "service_description": lambda params: params["description"],
+    "has_perfdata": True,
 }

@@ -14,11 +14,13 @@ from pyrad.dictionary import Dictionary
 from pyrad.packet import AccessAccept, AccessRequest
 import os
 import sys
+import time
 import logging as log
 import socket
 import argparse
 
 import cmk.utils.password_store
+
 cmk.utils.password_store.replace_passwords()
 
 
@@ -111,7 +113,9 @@ def main(argv):
     # send request
     try:
         log.debug('Sending authentication request')
+        start = time.perf_counter_ns()
         reply = srv.SendPacket(req)
+        request_time = (time.perf_counter_ns() - start) / 1000000000
     except Timeout:
         gtfo(2, "Error: RADIUS server does not reply")
     except socket.error as e:
@@ -123,15 +127,19 @@ def main(argv):
         log.debug("Attributes returned by server:")
         for i in reply:
             log.debug(f"{i}: {reply[i]}")
-        gtfo(0, "OK access accepted by radius server")
+        gtfo(
+            0, "OK access accepted by radius server, Response time: %0.2fs" %
+            request_time, request_time)
     else:
         gtfo(1, "WARN access denied by radius server")
 
 
-def gtfo(exitcode, message=''):
+def gtfo(exitcode, message='', perf=None):
     log.debug(f'Exiting with status {exitcode}. Message: {message}')
-    if message:
+    if message and perf == None:
         print(message)
+    elif message:
+        print(f"{message}|response_time={perf}")
     exit(exitcode)
 
 
