@@ -51,7 +51,7 @@ def check_dell_emc_ml3_drive(item, params, section):
     yield Result(state=status, summary=txt)
 
     cleaning_map = {
-        '1': (params.get('cleaning_needed', state.WARN), 'cleaning needed'),
+        '1': (state(params.get('cleaning_needed', 3)), 'cleaning needed'),
         '2': (state.OK, 'no cleaning needed')
     }
     status, txt = cleaning_map.get(cleaning, (state.UNKNOWN, 'unknown Status'))
@@ -93,7 +93,6 @@ def check_dell_emc_ml3_drive(item, params, section):
         status = params['opa_map'].get(ava, status)
         status = state(status)
     yield Result(state=status, summary="Operational Status: " + txt)
-
 
 register.snmp_section(
     name='dell_emc_ml3_drive',
