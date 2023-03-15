@@ -1,0 +1,11 @@
+title: Palo Alto: Packet Buffers
+agents: snmp
+catalog: hw/network/palo_alto
+license: GPLv2
+distribution: check_mk
+description:
+ Displays the buffers of a Palo Alto Device, and checks the utilization via the filesystem check (hr_fs).
+
+discovery:
+ One service is created for each buffer of an Palo Alto Device.
+

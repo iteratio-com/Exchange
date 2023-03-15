@@ -1,0 +1,12 @@
+title: Palo Alto: Flow DOS
+agents: snmp
+catalog: hw/network/palo_alto
+license: GPLv2
+distribution: check_mk
+description:
+ Displays the number of DOS Hardware block table, DOS block table Entries, DOS Software block table, Packets dropped by Flagged for blocking and under block duration by other, 
+ Packets dropped by Rate limited or IP blocked and Session denied by policy. Via Rule Levels can be set. Per default no levels are set.
+
+discovery:
+ One service is created for each Palo Alto.
+
