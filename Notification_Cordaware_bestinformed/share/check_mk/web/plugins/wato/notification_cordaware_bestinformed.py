@@ -62,8 +62,9 @@ class NotificationILert(NotificationParameter):
                  TextInput(
                      title=_("Origin Hostname (Checkmk Server)"),
                      help=
-                     _("Fill here the Hostname of the Monitoring Hosts, e.g. Checkmk.Foo.Bar. If there is a need for a FQN. Default is the Hostname of the Monitoring Server."
-                      ),
+                     _("Fill here the Hostname of the Monitoring Hosts, e.g. Checkmk.Foo.Bar."
+                       "If there is a need for a FQN, please fill here the complete Server name."
+                       " Default is the Hostname of the Monitoring Server."),
                      default_value=f"{socket.gethostname()}",
                      size=25,
                  )),
@@ -82,7 +83,7 @@ class NotificationILert(NotificationParameter):
                  TextUnicode(
                      title=_("Info text for host notifications (Template)"),
                      help=_(
-                         "Fill here the Syntax of the Message. All macros that are defined in the "
+                         "Fill here the Template of INFO (Host). All macros that are defined in the "
                          "notification context are Useable."),
                      default_value=TMPL_HOST_SUBJECT,
                      size=64,
@@ -91,7 +92,7 @@ class NotificationILert(NotificationParameter):
                  TextUnicode(
                      title=_("Info text for service notifications (Template)"),
                      help=_(
-                         "Fill here the Syntax of the Message. All macros that are defined in the "
+                         "Fill here the Template of INFO (service). All macros that are defined in the "
                          "notification context are Useable."),
                      default_value=TMPL_SERVICE_SUBJECT,
                      size=64,
@@ -129,26 +130,26 @@ class NotificationILert(NotificationParameter):
                  )),
                 ("duration",
                  Integer(title=_("Duration of message"),
-                         help=_("Fill here the Color as Hex Code"),
+                         help=_("Duration of message"),
                          default_value="3",
                          unit="min")),
                 ("active",
                  Integer(title=_("Active Time of message"),
-                         help=_("Fill here the Color as Hex Code"),
+                         help=_("Active time of Alert."),
                          default_value="5",
                          unit="min")),
                 ("ldap_or_groups",
                  DropdownChoice(title=_("LDAP or Groups"),
-                                help=_("Fill here the Color as Hex Code"),
+                                help=_("LDAP or Groups"),
                                 choices=[("false", "False"), ("true", "True")],
                                 default_value="false")),
                 ("ldap_groups_text",
                  ListOfStrings(title=_("LDAP Groups text"),
-                               help=_("Fill here the Color as Hex Code"),
+                               help=_("LDAP Groups to alert to"),
                                default_value=["sich3cinform_test"])),
                 ("filter",
                  ListOfStrings(title=_("Filters"),
-                               help=_("Fill here the Color as Hex Code"),
+                               help=_("Filter Infoclients"),
                                default_value=["Alle Infoclients"])),
                 ("info_background_caption",
                  TextUnicode(title=_("INFO Background Caption"),
