@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+#Cordaware bestinformed
+
+import requests
+import os
+import re
+import json
+import sys
+from typing import Any, List, Dict
+
+import hmac
+import hashlib
+import json
+import base64
+import bcrypt
+
+from cmk.notification_plugins.utils import retrieve_from_passwordstore
+
+
+def substitute_context(template: str, context: Dict[str, Any]) -> str:
+    # First replace all known variables
+    for varname, value in context.items():
+        template = template.replace("$" + varname + "$", value)
+
+    if re.search(r"\$[A-Z_][A-Z_0-9]*\$", template):
+        # Second pass to replace nested variables inside e.g. SERVICENOTESURL
+        for varname, value in context.items():
+            template = template.replace("$" + varname + "$", value)
+
+    # Remove the rest of the variables and make them empty
+    template = re.sub(r"\$[A-Z_][A-Z_0-9]*\$", "", template)
+    return template
+
+
+def get_groups(context: Dict[str, Any], which: str) -> List[str]:
+    out = []
+    for j in range(1, 99, 1):
+        if (v := context.get(f"{which}{j}")):
+            out.append(v)
+        else:
+            break
+    return out
+
+
+def create_textes(context: Dict[str, Any], info: str) -> str:
+    TMPL_HOST_SUBJECT = "Check_MK: $HOSTNAME$ - $EVENT_TXT$"
+    TMPL_SERVICE_SUBJECT = "Check_MK: $HOSTNAME$/$SERVICEDESC$ $EVENT_TXT$"
+
+    if info == 'INFO':
+        if context.get('WHAT') == 'HOST':
+            return substitute_context(template=context.get('PARAMETER_INFO_TXT_HOST', TMPL_HOST_SUBJECT),
+                                      context=context)
+        else:
+            return substitute_context(template=context.get('PARAMETER_INFO_TXT_SERVICE', TMPL_SERVICE_SUBJECT),
+                                      context=context)
+    else:
+        if context.get('WHAT') == 'HOST':
+            return substitute_context(template=context.get('PARAMETER_CAPTION_TXT_HOST', TMPL_HOST_SUBJECT),
+                                      context=context)
+        else:
+            return substitute_context(template=context.get('PARAMETER_CAPTION_TXT_SERVICE', TMPL_SERVICE_SUBJECT),
+                                      context=context)
+
+
+def create_json(context: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "action": "newinfo",
+        "info": f"<font size=\"{context.get('PARAMETER_INFO_SIZE', '3')}\">{create_textes(context=context, info='INFO')}</font><br>",
+        "caption": f"<font color=\"{context.get('PARAMETER_CAPTION_COLOR', 'FFFFFF')}\"><b><font size=\"{context.get('PARAMETER_CAPTION_SIZE', '3')}\">{create_textes(context=context, info='CAPTION')}</font></b></font><br>",
+        "minutes": context.get("PARAMETER_DURATION", "3"),
+        "active": context.get("PARAMETER_ACTIVE", "5"),
+        "utc_time": "false",
+        "self_delete": "false",
+        "infinity": "false",
+        "onetime": "false",
+        "continue": "false",
+        "dayperiodeachallvalue": "1",
+        "dayperiodcheckedvalue": "1",
+        "dayperiod": "1",
+        "dayperiodperiod": "1",
+        "dayperiodtype": "1",
+        "dayperiodtypetype": "2",
+        "alldays": "true",
+        "day_1": "false",
+        "day_2": "false",
+        "day_3": "false",
+        "day_4": "false",
+        "day_5": "false",
+        "day_6": "false",
+        "day_7": "false",
+        "minperiodvalue": "false",
+        "minperiodinterval": "1",
+        "minperiodactive": "1",
+        "minperiodstart": "-1",
+        "minperiodstartvalue": "0",
+        "soundonly": "false",
+        "beep": "false",
+        "loudness": "false",
+        "keeploudness": "false",
+        "countbeep": "0",
+        "soundcounttype": "1",
+        "showonusersdesktop": "true",
+        "cancloseonusersdesktop": "true",
+        "silentonusersdesktop": "false",
+        "breaksilentonusersdesktop": "false",
+        "previewonusersdesktop": "false",
+        "mincancloseonusersdesktop": "0",
+        "showonwinlogondesktop": "true",
+        "cancloseonwinlogondesktop": "true",
+        "silentonwinlogondesktop": "false",
+        "breaksilentonwinlogondesktop": "false",
+        "previewonwinlogondesktop": "false",
+        "mincancloseonwinlogondesktop": "0",
+        "offline": "false",
+        "globaltime": "false",
+        "tickerposition": "default",
+        "popup": "false",
+        "popupunit": "px",
+        "popupposition": "center",
+        "closeonclick": "true",
+        "cancelonclose": "true",
+        "cancelall": "false",
+        "cancelallsilent": "false",
+        "archived": "false",
+        "keepinfo": "false",
+        "manually_answers": ["text"],
+        "notifications": "false",
+        "filters": get_groups(context=context, which="PARAMETER_FILTER_"),
+        "ldap_or_groups": context.get('PARAMETER_LDAP_OR_GROUPS', "false"),
+        "ldap_groups_text": get_groups(context=context, which="PARAMETER_LDAP_GROUPS_TEXT_"),
+        "random": "1",
+        "random_before": "false",
+        "random_unique_period": "false",
+        "random_ambiguous_period": "false",
+        "quickusersonly": "false",
+        "quickusersadditional": "true",
+        "enabled": "true",
+        "info_0_background_caption": f"#{context.get('PARAMETER_INFO_BACKGROUND_CAPTION', 'CC0000')}",
+        "all_ous_checked": "false",
+        "all_ldap_groups_checked": "false",
+        "allgroups": "false"
+    }
+
+
+def make_request(context: Dict[str, Any]) -> None:
+    user = context.get("PARAMETER_API_USER")
+    secret = retrieve_from_passwordstore(context.get("PARAMETER_API_KEY"))
+    salt = bcrypt.gensalt()
+    secret = base64.b64encode(
+        hmac.HMAC((salt.decode() + secret).encode(), (user + salt.decode()).encode(),
+                  hashlib.sha256).digest())
+    payload = {"username": user, "secret": secret.decode(), "salt": salt.decode()}
+    XBestAuth = base64.b64encode(json.dumps(payload).encode())
+    try:
+        if context.get('PARAMETER_API_SSL_VERIFY', 'false') == 'false':
+            requests.packages.urllib3.disable_warnings()
+        r = requests.post(
+            url=f"{context.get('PARAMETER_API_URL')}/rest",
+            headers={
+                "X-Best-Auth": XBestAuth,
+                'username': user,
+                'Origin': context.get('PARAMETER_API_ORIGIN_HOST', context.get('MONITORING_HOST'))
+            },
+            json=create_json(context),
+            verify=True if context.get('PARAMETER_API_SSL_VERIFY', 'false') == 'true' else False,
+        )
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(2)
+    if not str(r.status_code).startswith('2'):
+        print(f"Error: HTTP Status Code {r.status_code}")
+        sys.exit(2)
+
+
+def main():
+    make_request(context=dict([(var[7:], value)
+                               for (var, value) in os.environ.items()
+                               if var.startswith("NOTIFY_")]))
+
+
+if __name__ == "__main__":
+    main()
