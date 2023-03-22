@@ -16,5 +16,7 @@ Run
 * **Dell EMC ML3**: SNMP Checks for Dell Tape Drives
 * **PiHole**: Special Agent for query pihole, Checks, HW/SW Inventory
 * **Palo Alto PAN DDOS FLOW**: SNMP Checks 
+* **Notification Plugin for Cordaware bestinformed**: Send notification to your Screen. Tool see https://www.cordaware.com/deu/cordaware-bestinformed
+
 
 To check the content of the MKPs, you can simply unpack them. MKPs are nothing more than tar files
