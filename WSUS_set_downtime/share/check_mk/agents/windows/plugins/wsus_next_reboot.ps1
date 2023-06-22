@@ -14,24 +14,26 @@ function Export-Registry {
 
     #Set $keys variable
     $keys = Get-ChildItem -Path $path -Recurse -ErrorAction SilentlyContinue
+    $tooold = 0
 
     foreach ($key in $keys) {
         foreach ($property in $key) {
             foreach ($name in $key.Property) {
                 try {   
-                    $Value = Get-ItemPropertyValue -Path $key.PSPath -Name $name
+                    $Value = (Get-ItemProperty -Path $key.PSPath -Name $name).$name
                     Write-Host ("{1};{2}" -f $property, $name, $Value )
                 }
                 catch {
-                    Write-Warning ("Error processing {0} in {1}" -f $property, $key.name)
+                    #Write-Warning ("Error processing {0} in {1}" -f $property, $key.name)
+                    $tooold=1
                 }
             }
         }
     }
     $timezone = [System.TimeZoneInfo]::Local.GetUtcOffset((Get-Date)).TotalSeconds
     $timeZone = $timeZone -replace '^','BaseUtcOffsetSeconds;' 
-    Write-Host $timeZone
-    
+    if ($tooold -le 0) {
+        Write-Host $timeZone
+    }
 }
 
-Export-Registry -cmksection wsus_next_reboot -path 'HKLM:SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\' 
