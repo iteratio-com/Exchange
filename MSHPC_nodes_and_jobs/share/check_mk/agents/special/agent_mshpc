@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+from pprint import pprint as pp
+import argparse
+import sys
+import requests
+import xmltodict
+
+import cmk.utils.password_store
+cmk.utils.password_store.replace_passwords()
+
+api_elements = {
+    "Jobs": "Jobs?properties=Id,JobTemplate,State",
+    "Nodes": "Nodes?",
+}
+
+
+def parse_arguments(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    defaults = (
+        ("url", "https://zdeoko04sc4h2.zeiss.org/WindowsHpc/", "API entry point"),
+        ("user", "Y19MSHPC", "User"),
+        ("secret", None, "Pass"),
+        ("rows", 1000000, "Rows per read"),
+        ("api", "api-version=2012-11-01", "API version"),
+    )
+
+    opts_with_help = (t for t in defaults if len(t) == 3)
+    for key, default, help_str in opts_with_help:
+        if default is not None:
+            help_str += " Default: %s" % default
+        parser.add_argument("--%s" % key, default=default, help=help_str)
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_arguments(argv)
+    session = requests.Session()
+    session.auth = (args.user, args.secret)
+
+    for elem in api_elements:
+        print(f"<<<mshpc_{elem.lower()}:sep(0)>>>")
+        api_url = (
+            f"{args.url}{api_elements.get(elem)}&RowsPerRead={args.rows}%20&{args.api}"
+        )
+        response = session.get(api_url)
+        data = xmltodict.parse(response.text)
+
+        output = {}
+
+        if elem == "Jobs":
+            for job in data["ArrayOfObject"]["Object"]:
+                for property in job.get("Properties", {}).get("Property", []):
+                    if property.get("Name") == "State":
+                        #job_id = property.get("Value")
+                        output.setdefault(property.get("Value"), []).append(".")
+
+            jobs_out = { "State" : {i: len(j) for i, j in output.items()}}
+            print(jobs_out)
+
+        elif elem == "Nodes":
+            node_list = {}
+            reachable = {}
+            state = {}
+            for node in data["ArrayOfObject"]["Object"]:
+                for property in node.get("Properties", {}).get("Property", []):
+                    if property.get("Name") == "Name":
+                        node_list.setdefault(property.get("Value"), []).append(node.get("Properties", {}).get("Property", []))
+                    if property.get("Name") == "Reachable":
+                        reachable.setdefault(property.get("Value"), []).append(".")
+                    reachable_out = { "Reachable" : {i: len(j) for i, j in reachable.items()}}
+                    if property.get("Name") == "State":
+                        state.setdefault(property.get("Value"), []).append(".")
+                    state_out = { "State" : {i: len(j) for i, j in state.items()}}
+            print(reachable_out)
+            print(state_out)
+
+    for nodeitem, nodedict in node_list.items():
+        print(f"<<<<{nodeitem}>>>>")
+        print("<<<mshpc_node_status:sep(0)>>>")
+        out = {}
+        for info in nodedict[0]:
+            out[info.get("Name")] = info.get("Value")
+        print(out)
+        print("<<<<>>>>")
+
+    #pp(node_list)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
