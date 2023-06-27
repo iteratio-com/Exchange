@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8; py-indent-offset: 4 -*-
 
-from pprint import pprint as pp
 import argparse
 import sys
 import requests
@@ -19,8 +18,8 @@ api_elements = {
 def parse_arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     defaults = (
-        ("url", "https://zdeoko04sc4h2.zeiss.org/WindowsHpc/", "API entry point"),
-        ("user", "Y19MSHPC", "User"),
+        ("url", "https://mshpc.host.org/WindowsHpc/", "API entry point"),
+        ("user", "MSHPC", "User"),
         ("secret", None, "Pass"),
         ("rows", 1000000, "Rows per read"),
         ("api", "api-version=2012-11-01", "API version"),
@@ -84,8 +83,6 @@ def main(argv=None):
             out[info.get("Name")] = info.get("Value")
         print(out)
         print("<<<<>>>>")
-
-    #pp(node_list)
 
 
 if __name__ == "__main__":
