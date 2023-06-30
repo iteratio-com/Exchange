@@ -10,13 +10,14 @@ Deploy Package to Checkmk-Site
 Run 
     mkp install PACK.mkp
 
-* **SAP MaxDB Plugin**: Checks the following things: General Status, Log/Database Utilization, Sessions, Backup Status for Checkmk 2.X
-* **SNMP Systemtime**: Gets the Timestamp of an SNMP-Device and compair it with the checmk-Server Time
 * **Active Radius Check using pyrad**: Active Check for Radius Server. Tested with Windows Domain Controller acting as server. Original Project: https://exchange.checkmk.com/p/radius
 * **Dell EMC ML3**: SNMP Checks for Dell Tape Drives
+* **MSHPC special agent**: Special agent for MSHPC, checking jobs, nodes and node states. Will create piggyback data for nodes.
+* **Notification Plugin for Cordaware bestinformed**: Send notification to your Screen. Tool see https://www.cordaware.com/deu/cordaware-bestinformed
 * **PiHole**: Special Agent for query pihole, Checks, HW/SW Inventory
 * **Palo Alto PAN DDOS FLOW**: SNMP Checks 
-* **Notification Plugin for Cordaware bestinformed**: Send notification to your Screen. Tool see https://www.cordaware.com/deu/cordaware-bestinformed
+* **SAP MaxDB Plugin**: Checks the following things: General Status, Log/Database Utilization, Sessions, Backup Status for Checkmk 2.X
+* **SNMP Systemtime**: Gets the Timestamp of an SNMP-Device and compair it with the checmk-Server Time
 * **WSUS set downtime**: Gets patchdate and -time information of the Windows registry and sets an accordingly downtime
 
 
