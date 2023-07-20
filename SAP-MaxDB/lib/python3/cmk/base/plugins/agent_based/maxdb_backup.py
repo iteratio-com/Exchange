@@ -41,12 +41,12 @@ def parse_maxdb_backup(string_table: StringTable) -> MaxDBBackupSection:
             if result.strip() != "0" or error_msg.strip():
                 parsed[srv].setdefault("error_jobs", []).append(job)
             if job.startswith("DAT"):
-                if parsed[srv].get("last_data") and parsed[srv]["last_data"][0] < age:
+                if parsed[srv].get("last_data") and parsed[srv]["last_data"][0] > age:
                     parsed[srv]["last_data"] = [age, job]
                 elif not parsed[srv].get("last_data"):
                     parsed[srv]["last_data"] = [age, job]
             elif job.startswith("LOG"):
-                if parsed[srv].get("last_log") and parsed[srv]["last_log"][0] < age:
+                if parsed[srv].get("last_log") and parsed[srv]["last_log"][0] > age:
                     parsed[srv]["last_log"] = [age, job]
                 elif not parsed[srv].get("last_log"):
                     parsed[srv]["last_log"] = [age, job]
