@@ -20,6 +20,8 @@ def parse_maxdb_backup(string_table: StringTable) -> MaxDBBackupSection:
             parsed.setdefault(srv, {})
         elif len(line) == 7:
             job, job_type, start, stop, result, error_msg, out = line
+            if job_type.strip() in ['HISTLOST', 'RESTORE']:
+                continue  # ignore lost history and restore jobs            
             if start == stop:
                 duration = 0
                 begin = datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
