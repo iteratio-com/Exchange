@@ -1,14 +1,16 @@
 # Exchange
 Checkmk extensions for the public exchange
 
-This is the official Checkmk Exchange from ITeratio.
-The packages are sent through development with customers and are approved by them.
+## This is the official Checkmk Exchange from ITeratio. 
+Packages are developed based on customer requirements and approved by those customers.
+
 Comments and suggestions for improvement are very welcome.
 
-Installation:
+### Installation
 Deploy Package to Checkmk-Site
+
 Run 
-    mkp install PACK.mkp
+    `mkp install PACK.mkp`
 
 * **Active Radius Check using pyrad**: Active Check for Radius Server. Tested with Windows Domain Controller acting as server. Original Project: https://exchange.checkmk.com/p/radius
 * **Dell EMC ML3**: SNMP Checks for Dell Tape Drives
@@ -21,4 +23,4 @@ Run
 * **WSUS set downtime**: Gets patchdate and -time information of the Windows registry and sets an accordingly downtime
 
 
-To check the content of the MKPs, you can simply unpack them. MKPs are nothing more than tar files
+To check the content of the MKPs, you can simply unpack them. MKPs are nothing else than tar files
