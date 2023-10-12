@@ -19,7 +19,7 @@ from pprint import pprint as pp
 def parse_arguments(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     defaults = (
-        ("hostname", "sadea100100.de.obi.net", "Hostname"),
+        ("hostname", None, "Hostname"),
         ("user", None, "User"),
         ("secret", None, "Pass"),
         ("verify_ssl", False, "Disable SSL certificate verification"),
