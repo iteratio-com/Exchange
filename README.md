@@ -18,7 +18,7 @@ Run
 * **Notification Plugin for Cordaware bestinformed**: Send notification to your Screen. Tool see https://www.cordaware.com/deu/cordaware-bestinformed
 * **Palo Alto PAN DDOS FLOW**: SNMP Checks 
 * **PiHole**: Special Agent for query pihole, Checks, HW/SW Inventory
-* **Rubrik Special Agent**: Special Agent for Rubrik Devices, Checks
+* **Rubrik Special Agent**: Special Agent for Rubrik Devices, will create piggyback data for nodes and includes the following Checks: Cluster System Status, Compliance 24 Hours (Cluster sided), Disk, Node Hardware Health, Node Status (Node sided)
 * **SAP MaxDB Plugin**: Checks the following things: General Status, Log/Database Utilization, Sessions, Backup Status for Checkmk 2.X
 * **SNMP Systemtime**: Gets the Timestamp of an SNMP-Device and compair it with the checmk-Server Time
 * **WSUS set downtime**: Gets patchdate and -time information of the Windows registry and sets an accordingly downtime
