@@ -4,7 +4,7 @@
 # 2023, marcus.klein@iteratio.com
 
 from cmk.gui.plugins.wato.utils import IndividualOrStoredPassword
-from cmk.gui.valuespec import Dictionary, TextInput, HTTPUrl
+from cmk.gui.valuespec import Dictionary, TextInput, Checkbox
 
 register_rule(
     "datasource_programs",
