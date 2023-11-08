@@ -9,7 +9,6 @@ from typing import List, Tuple, Any, Mapping
 from contextlib import suppress
 
 
-
 Section = List[Tuple[str, int, float, float]]
 
 
@@ -29,7 +28,7 @@ def parse_palo_alto_packet_buffers(string_table: StringTable) -> Section:
 
     parsed = []
     for hrtype, hrdescr, hrunits, hrsize, hrused in string_table:
-        if hrtype != '.1.3.6.1.2.1.25.2.1.1':
+        if hrtype != ".1.3.6.1.2.1.25.2.1.1":
             continue
         with suppress(ValueError):
             units = _to_bytes(hrunits)
@@ -50,8 +49,9 @@ register.snmp_section(
             "3",  # hrStorageDescr
             "4",  # hrStorageAllocationUnits
             "5",  # hrStorageSize
-            "6",  # hrStorageUsed 
-        ]),
+            "6",  # hrStorageUsed
+        ],
+    ),
 )
 
 
@@ -60,8 +60,9 @@ def discover_palo_alto_packet_buffers(section: Section) -> DiscoveryResult:
         yield Service(item=i[0])
 
 
-def check_palo_alto_packet_buffers(item: str, params: Mapping[str, Any],
-                                   section: Section) -> CheckResult:
+def check_palo_alto_packet_buffers(
+    item: str, params: Mapping[str, Any], section: Section
+) -> CheckResult:
     yield from df_check_filesystem_list(
         value_store=get_value_store(),
         item=item,
