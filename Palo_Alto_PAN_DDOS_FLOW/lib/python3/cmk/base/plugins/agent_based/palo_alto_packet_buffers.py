@@ -3,7 +3,7 @@
 
 from .agent_based_api.v1 import register, Service, SNMPTree, contains, get_value_store
 from .agent_based_api.v1.type_defs import StringTable, CheckResult, DiscoveryResult
-from .utils.df import df_check_filesystem_list
+from .utils.df import df_check_filesystem_list, FILESYSTEM_DEFAULT_PARAMS
 
 from typing import List, Tuple, Any, Mapping
 from contextlib import suppress
@@ -75,6 +75,6 @@ register.check_plugin(
     service_name="Buffers %s",
     discovery_function=discover_palo_alto_packet_buffers,
     check_function=check_palo_alto_packet_buffers,
-    check_default_parameters={},
+    check_default_parameters=FILESYSTEM_DEFAULT_PARAMS,
     check_ruleset_name="filesystem",
 )
