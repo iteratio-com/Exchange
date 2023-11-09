@@ -1,0 +1,17 @@
+title: Cisco Devices:  Sync-E
+agents: snmp
+catalog: hw/network/cisco
+license: GPLv2
+distribution: check_mk
+description:
+ The check searches for the Sync-E interfaces (type 3) and compares this number at each check interval. 
+
+ The signal quality is then analysed. 
+
+ Information such as priority etc. is then output in the details. 
+
+ In the setup you can set how many Sync-E interfaces there should be (default 2), the status when the number of interfaces changes (default {WARN}) and the status when the active interface has changed (default {CRIT}).
+
+
+discovery:
+ One service is created for each Cisco device.
