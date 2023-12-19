@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+
+import argparse
+import homematicip
+from homematicip.device import (
+    HeatingThermostat,
+    PlugableSwitchMeasuring,
+    ShutterContact,
+    TemperatureHumiditySensorDisplay,
+    WallMountedThermostatPro,
+    WaterSensor,
+)
+from homematicip.home import Home
+
+import cmk.utils.password_store
+
+cmk.utils.password_store.replace_passwords()
+
+
+def parse_arguments(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--token", help="Auth Token", required=True)
+    parser.add_argument("--ap", help="Access Point SGTIN", required=True)
+    parser.add_argument(
+        "--devices",
+        help="Device Types",
+        default="HeatingThermostat,PlugableSwitchMeasuring,ShutterContact,TemperatureHumiditySensorDisplay,WallMountedThermostatPro,WaterSensor",
+    )
+
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> int:
+    args = parse_arguments(argv)
+    home = Home()
+    home.set_auth_token(args.token)
+    home.init(args.ap)
+    home.get_current_state()
+    for devicetype in [
+        ShutterContact,
+        HeatingThermostat,
+        PlugableSwitchMeasuring,
+        WallMountedThermostatPro,
+        WaterSensor,
+        TemperatureHumiditySensorDisplay,
+    ]:
+        if devicetype.__name__.lower() in args.devices.lower():
+            print(f"<<<homematicip_{devicetype.__name__.lower()}:sep(124)>>>")
+            for g in home.groups:
+                if g.groupType == "META":
+                    for d in g.devices:
+                        if isinstance(d, devicetype):
+                            if isinstance(d, HeatingThermostat):
+                                print(
+                                    f"{g.label.replace(' ','')}|{d.deviceType}|{d.label}|{d.lastStatusUpdate}|{d.rssiDeviceValue}|{d.lowBat}|{d.unreach}|{d.configPending}|{d.dutyCycle}|{d.operationLockActive}|{d.valvePosition}|{d.valveState}|{d.temperatureOffset}|{d.setPointTemperature}|{d.valveActualTemperature}"
+                                )
+                            elif isinstance(d, ShutterContact):
+                                print(
+                                    f"{g.label.replace(' ','')}|{d.deviceType}|{d.label}|{d.lastStatusUpdate}|{d.rssiDeviceValue}|{d.windowState}"
+                                )
+                            elif isinstance(d, PlugableSwitchMeasuring):
+                                print(
+                                    f"{g.label.replace(' ','')}|{d.deviceType}|{d.label}|{d.lastStatusUpdate}|{d.rssiDeviceValue}|{d.currentPowerConsumption}|{d.energyCounter}"
+                                )
+                            elif isinstance(d, WallMountedThermostatPro):
+                                print(
+                                    f"{g.label.replace(' ','')}|{d.deviceType}|{d.label}|{d.lastStatusUpdate}|{d.rssiDeviceValue}|{d.actualTemperature}|{d.humidity}|{d.setPointTemperature}"
+                                )
+                            elif isinstance(d, WaterSensor):
+                                print(
+                                    f"{g.label.replace(' ','')}|{d.deviceType}|{d.label}|{d.lastStatusUpdate}|{d.rssiDeviceValue}|{d.moistureDetected}|{d.waterlevelDetected}|{d.incorrectPositioned}"
+                                )
+                            elif isinstance(d, TemperatureHumiditySensorDisplay):
+                                print(
+                                    f"{g.label.replace(' ','')}|{d.deviceType}|{d.label}|{d.lastStatusUpdate}|{d.rssiDeviceValue}|{d.actualTemperature}|{d.humidity}"
+                                )
+                            else:
+                                print(
+                                    f"{g.label.replace(' ','')}|{d.deviceType}|{d.label}|{d.lastStatusUpdate}|{d.rssiDeviceValue}"
+                                )
+
+
+if __name__ == "__main__":
+    main()
