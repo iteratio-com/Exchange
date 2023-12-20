@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+from typing import Any, Mapping, Optional, Sequence
+
+from cmk.base.check_api import passwordstore_get_cmdline
+from cmk.base.config import special_agent_info
+
+
+def agent_rubrik_hmip(
+    params: Mapping[str, Any], hostname: Optional[str], ipaddress: Optional[str]
+) -> Sequence[object]:
+    args = [
+        "--ap",
+        params["access_point"],
+        "--token",
+        passwordstore_get_cmdline("%s", params["auth_token"]),
+    ]
+
+    if params.get("device_types"):
+        args += ["--devices", ",".join(params["device_types"])]
+
+    return args
+
+
+special_agent_info["hmip"] = agent_rubrik_hmip
