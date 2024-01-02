@@ -8,10 +8,8 @@ description:
 
  Different levels and states can be set, default levels are given.
 
- The homematicip pip package is required, see https://github.com/hahn-th/homematicip-rest-api/
-
 item:
  Name of the thermostat
 
 discovery:
- One serivce is created for each thermostat
+ One service is created for each thermostat

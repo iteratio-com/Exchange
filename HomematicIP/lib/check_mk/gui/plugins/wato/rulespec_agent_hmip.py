@@ -47,8 +47,8 @@ def _valuespec_special_agents_hmip():
                     title=_("Device Types"),
                     choices=[
                         ("HeatingThermostat", _("Heating Thermostat")),
+                        ("ShutterContactMagnetic", _("Shutter Contact Magnetic")),
                         # ("PlugableSwitchMeasuring", _("Plugable Switch Measuring")),
-                        # ("ShutterContact", _("Shutter Contact")),
                         # (
                         #     "TemperatureHumiditySensorDisplay",
                         #     _("Temperature Humidity Sensor Display"),

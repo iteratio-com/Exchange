@@ -5,7 +5,7 @@ import homematicip
 from homematicip.device import (
     HeatingThermostat,
     PlugableSwitchMeasuring,
-    ShutterContact,
+    ShutterContactMagnetic,
     TemperatureHumiditySensorDisplay,
     WallMountedThermostatPro,
     WaterSensor,
@@ -24,7 +24,7 @@ def parse_arguments(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--devices",
         help="Device Types",
-        default="HeatingThermostat,PlugableSwitchMeasuring,ShutterContact,TemperatureHumiditySensorDisplay,WallMountedThermostatPro,WaterSensor",
+        default="HeatingThermostat,PlugableSwitchMeasuring,ShutterContactMagnetic,TemperatureHumiditySensorDisplay,WallMountedThermostatPro,WaterSensor",
     )
 
     return parser.parse_args(argv)
@@ -37,7 +37,7 @@ def main(argv=None) -> int:
     home.init(args.ap)
     home.get_current_state()
     for devicetype in [
-        ShutterContact,
+        ShutterContactMagnetic,
         HeatingThermostat,
         PlugableSwitchMeasuring,
         WallMountedThermostatPro,
@@ -54,7 +54,7 @@ def main(argv=None) -> int:
                                 print(
                                     f"{g.label.replace(' ','')}|{d.deviceType}|{d.label}|{d.lastStatusUpdate}|{d.rssiDeviceValue}|{d.lowBat}|{d.unreach}|{d.configPending}|{d.dutyCycle}|{d.operationLockActive}|{d.valvePosition}|{d.valveState}|{d.temperatureOffset}|{d.setPointTemperature}|{d.valveActualTemperature}"
                                 )
-                            elif isinstance(d, ShutterContact):
+                            elif isinstance(d, ShutterContactMagnetic):
                                 print(
                                     f"{g.label.replace(' ','')}|{d.deviceType}|{d.label}|{d.lastStatusUpdate}|{d.rssiDeviceValue}|{d.windowState}"
                                 )
