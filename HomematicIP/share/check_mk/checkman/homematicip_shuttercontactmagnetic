@@ -1,0 +1,15 @@
+title: HomematicIP Magnetic Shutter Contact
+agents: agent
+catalog: hw/environment/homematicip
+license: GPLv2
+distribution: check_mk
+description:
+ This check monitors the window state and the RSSI value on of HomematicIP magnetic shutter contacts
+
+ RSSI levels and expected window state can be set, default params are given.
+
+item:
+ Name of the shutter contact
+
+discovery:
+ One service is created for each shutter contact
