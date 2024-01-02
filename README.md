@@ -15,7 +15,7 @@ Run
 
 * **Active Radius Check using pyrad**: Active Check for Radius Server. Tested with Windows Domain Controller acting as server. Original Project: https://exchange.checkmk.com/p/radius
 * **Dell EMC ML3**: SNMP Checks for Dell Tape Drives
-* **HomematicIP special agent**: Monitoring the temperature sensors, RSSI value and valve position of HomematicIP thermostats.
+* **HomematicIP special agent**: Monitoring the temperature sensors, RSSI value and valve position of HomematicIP thermostats and state of magnetic shutter contacts
 * **MSHPC special agent**: Special agent for MSHPC, checking jobs, nodes and node states. Will create piggyback data for nodes.
 * **Notification Plugin for Cordaware bestinformed**: Send notification to your Screen. Tool see https://www.cordaware.com/deu/cordaware-bestinformed
 * **Palo Alto PAN DDOS FLOW**: SNMP Checks 
