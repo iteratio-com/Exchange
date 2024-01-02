@@ -9,9 +9,10 @@ Comments and suggestions for improvement are very welcome.
 ### Installation
 Deploy Package to Checkmk-Site
 
-Run 
-    * `mkp add PACK.mkp`
-    * `mkp enable PACK`
+Run:
+   
+* `mkp add PACK.mkp`
+* `mkp enable PACK`
 
 * **Active Radius Check using pyrad**: Active Check for Radius Server. Tested with Windows Domain Controller acting as server. Original Project: https://exchange.checkmk.com/p/radius
 * **Dell EMC ML3**: SNMP Checks for Dell Tape Drives
