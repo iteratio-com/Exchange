@@ -14,6 +14,8 @@ Run:
 * `mkp add PACK.mkp`
 * `mkp enable PACK`
 
+### Packages
+
 * **Active Radius Check using pyrad**: Active Check for Radius Server. Tested with Windows Domain Controller acting as server. Original Project: https://exchange.checkmk.com/p/radius
 * **Dell EMC ML3**: SNMP Checks for Dell Tape Drives
 * **HomematicIP special agent**: Monitoring the temperature sensors, RSSI value and valve position of HomematicIP thermostats and state of magnetic shutter contacts
