@@ -3,39 +3,30 @@
 
 # 2023, marcus.klein@iteratio.com
 
-from .agent_based_api.v1 import (
-    register,
-    Result,
-    Service,
-    State,
-)
-
-import ast
+from .agent_based_api.v1 import HostLabel, Result, Service, State, register
+from .agent_based_api.v1.type_defs import CheckResult, DiscoveryResult, HostLabelGenerator
+from .utils.rubrik_api import RubrikSection, parse_rubrik
 
 
-def parse_rubrik_cluster_system_status(string_table):
-    try:
-        out = ast.literal_eval(string_table[0][0])
-    except:
-        out = {}
-
-    return out
+def host_label_rubrik_cluster(section: RubrikSection) -> HostLabelGenerator:
+    if section.get("status"):
+        yield HostLabel("rubrikDevice", "cluster")
 
 
 register.agent_section(
     name="rubrik_cluster_system_status",
-    parse_function=parse_rubrik_cluster_system_status,
+    parse_function=parse_rubrik,
+    host_label_function=host_label_rubrik_cluster,
 )
 
 
-def discover_rubrik_cluster_system_status(section):
+def discover_rubrik_cluster_system_status(section: RubrikSection) -> DiscoveryResult:
     if section:
         yield Service()
 
 
-def check_rubrik_cluster_system_status(params, section):
+def check_rubrik_cluster_system_status(section: RubrikSection) -> CheckResult:
     if not section:
-        yield Result(state=State.UNKNOWN, summary="No Data")
         return
 
     status = section["status"].upper()
@@ -61,6 +52,4 @@ register.check_plugin(
     service_name="Rubrik Cluster System Status",
     discovery_function=discover_rubrik_cluster_system_status,
     check_function=check_rubrik_cluster_system_status,
-    check_default_parameters={},
-    check_ruleset_name="rubrik_cluster_system_status",
 )

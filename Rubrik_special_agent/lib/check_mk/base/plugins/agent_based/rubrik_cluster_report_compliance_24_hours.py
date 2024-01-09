@@ -1,62 +1,73 @@
-
 #!/usr/bin/env python3
 # -*- encoding: utf-8; py-indent-offset: 4 -*-
 
 # 2023, marcus.klein@iteratio.com
 
-from .agent_based_api.v1 import (
-    register,
-    Result,
-    Service,
-    State,
-)
+from typing import Any, Mapping
 
-import ast
-
-def parse_rubrik_cluster_compliance_24_hours(string_table):
-    try:
-        out = ast.literal_eval(string_table[0][0])
-    except:
-        out = {}
-    return out
-
+from .agent_based_api.v1 import Metric, Result, Service, State, check_levels, register, render
+from .agent_based_api.v1.type_defs import CheckResult, DiscoveryResult
+from .utils.rubrik_api import RubrikSection, parse_rubrik
 
 register.agent_section(
     name="rubrik_cluster_compliance_24_hours",
-    parse_function=parse_rubrik_cluster_compliance_24_hours,
+    parse_function=parse_rubrik,
 )
 
 
-def discover_rubrik_cluster_compliance_24_hours(section):
+def discover_rubrik_cluster_compliance_24_hours(
+    section: RubrikSection,
+) -> DiscoveryResult:
     if section:
         yield Service()
 
-def check_rubrik_cluster_compliance_24_hours(section):
+
+def check_rubrik_cluster_compliance_24_hours(
+    params: Mapping[str, Any], section: RubrikSection
+) -> CheckResult:
     if not section:
-        yield Result(state=State.UNKNOWN, summary="No Data")
         return
 
-    print(section)
     yield Result(
-        state=State.WARN if section['numberOfInComplianceSnapshots'] < 0 else State.OK,
-        summary=f"Snapshots in compliance: {section['numberOfInComplianceSnapshots']}, Snapshots out of compliance: {section['numberOfOutOfComplianceSnapshots']}",
-        details=f"Total protcted objects: {section['totalProtected']}, Snapshots awaiting first full: {section['numberAwaitingFirstFull']}"
+        state=State.OK,
+        summary=f"Total protected objects: {section['totalProtected']}, Snapshots awaiting first full: {section['numberAwaitingFirstFull']}",
     )
 
-    # yield Result(
-    #     state=State.WARN if section['numberOfOutOfComplianceSnapshots'] > 0 else State.OK,
-    #     summary=f"",
-    # )
+    yield Metric(
+        name="total_protected_objects",
+        value=section["totalProtected"],
+    )
 
-    # yield Result(
-    #     state=State.WARN if section['percentOutOfCompliance'] > 0 else State.OK,
-    #     summary=f"% out of compliance: {section['percentOutOfCompliance']}",
-    # )
+    yield Metric(
+        name="snapshots_awaiting_first_full",
+        value=section["numberAwaitingFirstFull"],
+    )
 
-    # yield Result(
-    #     state=State.WARN if section['percentInCompliance'] < 100 else State.OK,
-    #     summary=f"% in compliance: {section['percentInCompliance']}",
-    # )
+    yield Metric(
+        name="snapshots_in_compliance",
+        value=section["numberOfInComplianceSnapshots"],
+    )
+
+    yield Metric(
+        name="snapshots_in_compliance_percent",
+        value=section["percentInCompliance"],
+    )
+
+    yield from check_levels(
+        section["numberOfOutOfComplianceSnapshots"],
+        metric_name="snapshots_out_of_compliance",
+        levels_upper=params["absolute_out_of_compliance"],
+        render_func=int,
+        label="Snapshots out of compliance",
+    )
+
+    yield from check_levels(
+        section["percentOutOfCompliance"],
+        metric_name="snapshots_out_of_compliance_percent",
+        levels_upper=params["percent_out_of_compliance"],
+        render_func=render.percent,
+        label="Percent snapshots out of compliance",
+    )
 
 
 register.check_plugin(
@@ -64,4 +75,9 @@ register.check_plugin(
     service_name="Rubrik Compliance 24 Hours",
     discovery_function=discover_rubrik_cluster_compliance_24_hours,
     check_function=check_rubrik_cluster_compliance_24_hours,
+    check_ruleset_name="rubrik_cluster_compliance_24_hours",
+    check_default_parameters={
+        "absolute_out_of_compliance": (1, 5),
+        "percent_out_of_compliance": (1, 5),
+    },
 )

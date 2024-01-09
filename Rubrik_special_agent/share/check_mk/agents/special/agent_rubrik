@@ -5,51 +5,41 @@
 
 import argparse
 import sys
-import requests
-
-requests.packages.urllib3.disable_warnings()
+from typing import NoReturn, Optional
 
 import cmk.utils.password_store
+import requests
 
 cmk.utils.password_store.replace_passwords()
 
-from pprint import pprint as pp
 
-
-def parse_arguments(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    defaults = (
-        ("hostname", None, "Hostname"),
-        ("user", None, "User"),
-        ("secret", None, "Pass"),
-        ("verify_ssl", False, "Disable SSL certificate verification"),
-    )
-
-    opts_with_help = (t for t in defaults if len(t) == 3)
-    for key, default, help_str in opts_with_help:
-        if default is not None:
-            help_str += " Default: %s" % default
-        parser.add_argument("--%s" % key, default=default, help=help_str)
-    return parser.parse_args(argv)
+sections = [
+    "cluster_system_status",
+    "cluster_compliance_status",
+    "node_status",
+    "node_disk_status",
+    "node_hardware_health",
+]
 
 
 class RubrikRestApi:
     def __init__(
         self,
-        hostname,
-        verify=False,
-        username=None,
-        password=None,
-        protocol="https",
+        hostname: str,
+        username: str,
+        password: str,
+        verify: Optional[bool] = False,
     ):
-        self.base_rubrik_url = f"{protocol}://{hostname}/api/"
+        self.base_rubrik_url = f"https://{hostname}/api/"
         self.session = None
         self.verify = verify
+        if not self.verify:
+            requests.packages.urllib3.disable_warnings()
         self.username = username
         self.password = password
         self.token = None
 
-    def login(self):
+    def login(self) -> NoReturn:
         self.session = requests.Session()
         self.session.headers["accept"] = "application/json"
         try:
@@ -59,7 +49,17 @@ class RubrikRestApi:
                 verify=self.verify,
             )
         except Exception as e:
-            print(f"Request error: {e}")
+            sys.stderr.write(f"Request error: {e}")
+            sys.exit(1)
+
+        # response = {
+        #     "cause": None,
+        #     "errorType": "user_error",
+        #     "message": "Max of 10 API Tokens reached.",
+        # }
+
+        if response.json().get("errorType") == "user_error":
+            sys.stderr.write(f"Login error: {response.json().get('message')}")
             sys.exit(1)
 
         self.token = response.json().get("token")
@@ -69,75 +69,54 @@ class RubrikRestApi:
             }
         )
 
-    def delete_token(self):
+    def delete_token(self) -> int:
         if self.token:
             try:
                 r = self.session.delete(
                     url=f"{self.base_rubrik_url}v1/session/me", verify=self.verify
                 )
+                # print(f"Token successful deleted: status code: {r.status_code}")
             except Exception as e:
-                print(f"Token delete error: {e}")
-                sys.exit(1)
+                # sys.stderr.write(f"Could not delete token delete status code: {r.status_code}")
+                sys.stderr.write(f"Token delete error: {e}")
+                return 1
+        return 0
 
-    def get_cluster_node(self):
-        r = self.session.get(
-            url=f"{self.base_rubrik_url}internal/cluster/me/node", verify=self.verify
-        )
+    def get_endpoint_data(self, endpoint: str) -> dict:
+        try:
+            r = self.session.get(url=f"{self.base_rubrik_url}{endpoint}", verify=self.verify)
+        except Exception as e:
+            print(f"Request error: {e}")
 
-        for node in r.json().get("data"):
-            print(f"<<<<{node.get('id')}>>>>")
-            print("<<<rubrik_node:sep(0)>>>")
-            print(node)
-            print("<<<<>>>>")
+        try:
+            data = r.json()
+        except:
+            data = {}
 
-    def get_cluster_system_status(self):
-        r = self.session.get(
-            url=f"{self.base_rubrik_url}internal/cluster/me/system_status", verify=self.verify
-        )
-        print("<<<rubrik_cluster_system_status:sep(0)>>>")
-        print(r.json())
-
-    def get_report_summary_24_hours(self):
-        r = self.session.get(
-            url=f"{self.base_rubrik_url}internal/report/compliance_summary_24_hours",
-            verify=self.verify,
-        )
-        print("<<<rubrik_cluster_compliance_24_hours:sep(0)>>>")
-        print(r.json())
-
-    def get_cluster_hardware_health(self):
-        r = self.session.get(
-            url=f"{self.base_rubrik_url}internal/cluster/me/hardware_health", verify=self.verify
-        )
-
-        #print(r.json())
-        for hostname, data in r.json().items():
-            print(f"<<<<{hostname}>>>>")
-            print("<<<rubrik_node_hardware_health:sep(0)>>>")
-            print(data)
-            print("<<<<>>>>")
-
-    def get_cluster_disk(self):
-        r = self.session.get(
-            url=f"{self.base_rubrik_url}internal/cluster/me/disk", verify=self.verify
-        )
-
-        cluster_out = {}
-
-        for node in r.json().get("data"):
-            cluster_out.setdefault(node.get("nodeId", "").split(":::")[-1], []).append(node)
-        for hostname, data in cluster_out.items():
-            print(f"<<<<{hostname}>>>>")
-            print("<<<rubrik_node_disk:sep(0)>>>")
-            print(data)
-            print("<<<<>>>>")
+        return data
 
 
-def main(argv=None):
+def parse_arguments(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--user", help="User Name for API Calls", required=True)
+    parser.add_argument("--secret", help="Secret of User", required=True)
+    parser.add_argument("--hostname", help="Hostname to make calls to", required=True)
+    parser.add_argument(
+        "--verify_ssl",
+        help="Disable SSL certificate verification",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--sections",
+        type=lambda s: s.split(","),
+        default=sections,
+        help=f"Sections to query. This is a comma separated list of {', '.join(sections)}. Default is to query all sections.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> int:
     args = parse_arguments(argv)
-    if not args.secret:
-        sys.exit(0)
-
     api = RubrikRestApi(
         username=args.user,
         password=args.secret,
@@ -146,18 +125,44 @@ def main(argv=None):
     )
 
     api.login()
-    try:
-        api.get_cluster_system_status()
-        api.get_report_summary_24_hours()
-        api.get_cluster_node()
-        api.get_cluster_disk()
-        api.get_cluster_hardware_health()
-    except:
-        pass
-    finally:
-        api.delete_token()
 
-    return 0
+    # Cluster Data
+    # System Status
+    if "cluster_system_status" in args.sections:
+        print("<<<rubrik_cluster_system_status:sep(0)>>>")
+        print(api.get_endpoint_data("internal/cluster/me/system_status"))
+
+    # Compliance Summary (Snapshots)
+    if "cluster_compliance_status" in args.sections:
+        print("<<<rubrik_cluster_compliance_24_hours:sep(0)>>>")
+        print(api.get_endpoint_data("internal/report/compliance_summary_24_hours"))
+
+    # Cluster Nodes Data
+    # Node Data
+    if "node_status" in args.sections:
+        for node in api.get_endpoint_data("internal/cluster/me/node").get("data", []):
+            print(f"<<<<{node.get('id')}>>>>")
+            print("<<<rubrik_node:sep(0)>>>")
+            print(node)
+            print("<<<<>>>>")
+
+    # Node Disks
+    if "node_disk_status" in args.sections:
+        for disk in api.get_endpoint_data("internal/cluster/me/disk").get("data", []):
+            print(f"<<<<{disk.get('nodeId', '').split(':::')[-1]}>>>>")
+            print("<<<rubrik_node_disk:sep(0)>>>")
+            print(disk)
+            print("<<<<>>>>")
+
+    # Node Hardware Health
+    if "node_hardware_health" in args.sections:
+        for node, health in api.get_endpoint_data("internal/cluster/me/hardware_health").items():
+            print(f"<<<<{node}>>>>")
+            print("<<<rubrik_node_hardware_health:sep(0)>>>")
+            print(health)
+            print("<<<<>>>>")
+
+    return api.delete_token()
 
 
 if __name__ == "__main__":
