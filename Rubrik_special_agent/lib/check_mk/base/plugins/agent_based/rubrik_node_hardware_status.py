@@ -3,19 +3,14 @@
 
 # 2023, marcus.klein@iteratio.com
 
-from .agent_based_api.v1 import (
-    register,
-    Result,
-    Service,
-    State,
-)
+from .agent_based_api.v1 import Result, Service, State, register
+from .agent_based_api.v1.type_defs import CheckResult, DiscoveryResult, StringTable
+from .utils.rubrik_api import RubrikSection
 
 
-def parse_rubrik_node_hardware_health(string_table):
-    if not string_table:
-        return {}
-    title = ""
+def parse_rubrik_node_hardware_health(string_table: StringTable) -> RubrikSection:
     out = {}
+    title = ""
     for line in string_table:
         line = line[0]
         if len(line.split(":")) == 2 and line.split(":")[1]:
@@ -37,6 +32,7 @@ def parse_rubrik_node_hardware_health(string_table):
             continue
         if title:
             out[title].append(line.strip())
+
     return out
 
 
@@ -46,18 +42,17 @@ register.agent_section(
 )
 
 
-def discover_node_hardware_health(section):
+def discover_node_hardware_health(section: RubrikSection) -> DiscoveryResult:
     if section:
         yield Service()
 
 
-def check_node_hardware_health(section):
+def check_node_hardware_health(section: RubrikSection) -> CheckResult:
     if not section:
-        yield Result(state=State.UNKNOWN, summary="No Data")
         return
 
-    if "FRU" in section:
-        if "All FRUS in the node are healthy." in section["FRU"][0]:
+    if fru := section.get("FRU", []):
+        if "All FRUS in the node are healthy." in fru[0]:
             yield Result(
                 state=State.OK,
                 summary="All FRUS in the node are healthy",
@@ -65,7 +60,7 @@ def check_node_hardware_health(section):
         else:
             yield Result(
                 state=State.CRIT,
-                summary=f"FRU in the node are not healthy {', '.join(section['FRU'])}",
+                summary=f"FRU in the node are not healthy {', '.join(fru)}",
             )
 
     defect_disks = {"ok": [], "errors": []}
