@@ -26,6 +26,7 @@ Run:
 * **Rubrik Special Agent**: Special Agent for Rubrik Devices, will create piggyback data for nodes and includes the following Checks: Cluster System Status, Compliance 24 Hours (Cluster sided), Disk, Node Hardware Health, Node Status (Node sided)
 * **SAP MaxDB Plugin**: Checks the following things: General Status, Log/Database Utilization, Sessions, Backup Status for Checkmk 2.X
 * **SNMP Systemtime**: Gets the Timestamp of an SNMP-Device and compair it with the checmk-Server Time
+* **Windows System Updates With Ignore Option**: Ignore per strings specified update packages
 * **WSUS set downtime**: Gets patchdate and -time information of the Windows registry and sets an accordingly downtime
 
 
