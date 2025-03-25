@@ -1,0 +1,16 @@
+title: Windows File Server Ressource Manager (FSRM) 
+agents: windows
+catalog: os/storage
+license: GPLv2
+distribution: check_mk
+description:
+ This check monitors the size and used space of the FSRM Quota.
+
+ The usage is checked against a warning and a critical level
+ which can be specified in numerous ways.
+
+item:
+ The path name.
+
+discovery:
+ One service is created for each path.
