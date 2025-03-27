@@ -1,0 +1,23 @@
+
+
+
+pattern:
+    ias:([a-zA-Z0-9]+);.*:
+        ignore_values: ["none", "null"]
+        static_labels:
+            ias: "yes"
+        custom_keys:
+            Customer: "\\1"
+
+
+
+    # {
+    #     "pattern": {
+    #         "ias:([a-zA-Z0-9]+);.*": {
+    #             "custom_keys": {"Customer": "\\1"}, 
+    #                            this can be replace with Regex Groups, also \\2 etc.
+    #             "ignore_values": ["none", "null"],
+    #             "static_labels": {"ias": "yes"},
+    #         }
+    #     }
+    # }
