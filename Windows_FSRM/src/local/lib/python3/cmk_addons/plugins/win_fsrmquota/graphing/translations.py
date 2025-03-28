@@ -5,7 +5,7 @@ from cmk.graphing.v1 import translations
 
 
 translation_win_fsrmquota = translations.Translation(
-    name="dwin_fsrmquota",
+    name="win_fsrmquota",
     check_commands=[
         translations.PassiveCheck("win_fsrmquota"),
     ],
@@ -17,6 +17,8 @@ translation_win_fsrmquota = translations.Translation(
             "fs_growth",
             12.136296296296296,
         ),
+        "overprovisioned": translations.ScaleBy(1048576),
+        "reserved": translations.ScaleBy(1048576),
         "trend": translations.RenameToAndScaleBy(
             "fs_trend",
             12.136296296296296,
@@ -29,4 +31,3 @@ translation_win_fsrmquota = translations.Translation(
         ),
     },
 )
-
