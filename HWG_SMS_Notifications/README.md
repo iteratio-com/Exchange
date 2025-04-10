@@ -1,6 +1,4 @@
-# Active Radius Check using pyrad
-
-Sending HWG Notifications via Post Request
+# Sending HWG Notifications via Post Request
 
 This is for HWG-sms-Gw3 Modems, like
 https://www.hw-group.com/support/how-to-send-sms-via-hwg-sms-gw3
