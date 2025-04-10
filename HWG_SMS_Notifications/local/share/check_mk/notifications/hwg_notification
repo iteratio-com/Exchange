@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+# HWG SMS Modem
+
+import sys
+import os
+import requests
+from time import strftime, localtime
+import re
+
+PluginNotificationContext = dict[str, str]
+
+from cmk.notification_plugins.utils import (
+    retrieve_from_passwordstore,
+)
+
+default_service_template = "$LASTSERVICESTATECHANGE$ - $HOSTNAME$/$SERVICEDESC$ $EVENT_TXT$"
+default_host_template = "$LASTHOSTSTATECHANGE$ - $HOSTNAME$ - $EVENT_TXT$"
+
+
+def substitute_context(template: str, context: PluginNotificationContext) -> str:
+    if "$LASTSERVICESTATECHANGE$" in template:
+        timestamp = int(context.get("LASTSERVICESTATECHANGE", 0))
+        timestamp = strftime("%Y-%m-%d %H:%M:%S", localtime(timestamp))
+        template = template.replace("$LASTSERVICESTATECHANGE$", timestamp)
+
+    if "$LASTHOSTSTATECHANGE$" in template:
+        timestamp = int(context.get("LASTHOSTSTATECHANGE", 0))
+        timestamp = strftime("%Y-%m-%d %H:%M:%S", localtime(timestamp))
+        template = template.replace("$LASTHOSTSTATECHANGE$", timestamp)
+
+    # First replace all known variables
+    for varname, value in context.items():
+        template = template.replace("$" + varname + "$", value)
+
+    if re.search(r"\$[A-Z_][A-Z_0-9]*\$", template):
+        # Second pass to replace nested variables inside e.g. SERVICENOTESURL
+        for varname, value in context.items():
+            template = template.replace("$" + varname + "$", value)
+
+    # Remove the rest of the variables and make them empty
+    template = re.sub(r"\$[A-Z_][A-Z_0-9]*\$", "", template)
+    return template
+
+
+def return_SOAP_SAMPLE(number: str, text: str) -> str:
+    """function for returning Soap to number and text.
+    text is trim to the max of an SMS, which should be 160 Characters.
+
+    Args:
+        number (str): Number the SMS is Send to
+        text (str): Text for the SMS
+
+    Returns:
+        str: the soap envelope
+    """
+    return f"""<?xml version="1.0" encoding="utf-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <pos:QueueAdd>
+      <Queue>GsmOut</Queue>
+      <Gsm>
+        <Cmd>SMS</Cmd>
+        <Nmr>{number}</Nmr>
+        <Text>{text}</Text>
+      </Gsm>
+    </pos:QueueAdd>
+  </soapenv:Body>
+</soapenv:Envelope>"""
+
+
+def check_result(result_text: str, url: str, result_code: int) -> bool:
+    if result_code != 200:
+        print(f"Status Code {result_code} on {url}")
+        return True
+
+    if "<Rslt>1</Rslt>" not in result_text:
+        print(f"Missing '<Rslt>1</Rslt>' in output: {result_text}")
+        return True
+    return False
+
+
+def get_message_from_context(context: PluginNotificationContext) -> str:
+    if context["WHAT"] == "SERVICE":
+        return substitute_context(
+            template=context.get("PARAMETER_SERVICE_SUBJECT", default_service_template),
+            context=context,
+        )
+    else:
+        return substitute_context(
+            template=context.get("PARAMETER_HOST_SUBJECT", default_host_template), context=context
+        )
+
+
+def make_request(context: PluginNotificationContext) -> int:
+    """make a Request and send Soap
+
+    Args:
+        context (Dict[str, Any]): Notification Context
+
+    Returns:
+        int: Exit Code
+    """
+
+    user = context.get("PARAMETER_SMS_USER")
+    secret = retrieve_from_passwordstore(context["PARAMETER_SMS_PASSWORD"])
+    auth = (user, secret) if user else None
+    message = get_message_from_context(context)
+    url = f"http://{context.get('PARAMETER_SMS_URL')}/service.xml"
+
+    number = context.get("CONTACTPAGER", "").replace(" ", "")
+    if not number:
+        return 0
+
+    retry = False
+    try:
+        r = requests.post(
+            url,
+            headers={"content-type": "text/xml"},
+            data=return_SOAP_SAMPLE(number=number, text=message),
+            auth=auth,
+            timeout=context.get("PARAMETER_TIMEOUT"),
+        )
+    except Exception as e:
+        print(f"ERROR using {context.get('PARAMETER_SMS_URL')}: {e}")
+        retry = True
+        pass
+
+    if retry or check_result(result_text=r.text, url=r.url, result_code=r.status_code):
+        if context.get("PARAMETER_SMS_BACKUP_URL"):
+            url_backup = f"http://{context.get('PARAMETER_SMS_BACKUP_URL')}/service.xml"
+            try:
+                r = requests.post(
+                    url_backup,
+                    headers={"content-type": "text/xml"},
+                    data=return_SOAP_SAMPLE(number=number, text=message),
+                    auth=auth,
+                    timeout=context.get("PARAMETER_TIMEOUT"),
+                )
+            except Exception as e:
+                print(f"ERROR using Backup {context.get('PARAMETER_SMS_BACKUP_URL')}: {e}")
+            retry = check_result(result_text=r.text, url=r.url, result_code=r.status_code)
+        else:
+            return 1
+    if retry:
+        return 1
+    return 0
+
+
+def main():
+    context = {var[7:]: value for var, value in os.environ.items() if var.startswith("NOTIFY_")}
+    return make_request(context=context)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
