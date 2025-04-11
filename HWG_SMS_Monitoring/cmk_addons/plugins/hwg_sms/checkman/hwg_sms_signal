@@ -1,0 +1,11 @@
+title: HWg SMS Modem: Modem Signal Strength
+agents: snmp
+catalog: hw/environment/hwg
+license: GPLv2
+distribution: check_mk
+description:
+
+ This checks HWg SMS modem signal strength and Signal Quality.
+
+discovery:
+ One service is created

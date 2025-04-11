@@ -1,0 +1,12 @@
+title: HWg SMS Modem: SMS Statistics
+agents: snmp
+catalog: hw/environment/hwg
+license: GPLv2
+distribution: check_mk
+description:
+
+ This check shows the number of SMS messages which were successful and faild of a HWg SMS modem.
+ 
+
+discovery:
+ One service is created

@@ -1,0 +1,11 @@
+title: HWg SMS Modem: SMS Message Queue Length
+agents: snmp
+catalog: hw/environment/hwg
+license: GPLv2
+distribution: check_mk
+description:
+
+ This check shows the number of SMS messages in the queue of a HWg SMS modem.
+
+discovery:
+ One service is created

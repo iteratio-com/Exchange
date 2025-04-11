@@ -1,0 +1,13 @@
+title: HWg SMS Modem: Modem Status
+agents: snmp
+catalog: hw/environment/hwg
+license: GPLv2
+distribution: check_mk
+description:
+
+ This checks the status of the HWg SMS modem. It will get {CRIT} if the modem is not connected to the network. 
+ It will get {OK} if the modem is connected to the network (Registered). 
+ 
+
+discovery:
+ One service is created
