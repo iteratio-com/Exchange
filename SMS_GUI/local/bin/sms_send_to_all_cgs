@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+
+# 0 20 * * *  /omd/sites/SITENAME/bin/python3 /omd/sites/kplus/local/bin/sms_send_to_all_cgs >/dev/null 2>&1
+
+import cmk.utils.paths as cmk_paths
+from ast import literal_eval
+from pathlib import Path
+import sys
+import os
+from time import time
+import argparse
+from typing import Optional
+
+# SERVICE_NAME_FOR_TEST_NOTIFICATION = "Test Notification"
+
+
+def parse_arguments(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--exclude",
+        type=str,
+        help=f"Fill in comma a list for exclude Contactgroups, e.g. carrier,testgroup",
+    )
+    parser.add_argument(
+        "--include",
+        type=str,
+        help=f"Fill in comma a list for trigger only certain Contactgroups, e.g. carrier,testgroup",
+    )
+    parser.add_argument(
+        "--service_name",
+        type=str,
+        default="Test Notification",
+        help=f"Service Name for Test Notification, default 'Test Notification', please do not change!",
+    )
+    parser.add_argument("-v", action="store_true", help="Enable verbose output")
+    return parser.parse_args(argv)
+
+
+def send_sms(host: str, service_name_for_test_notification: str):
+    cmd = f"PROCESS_SERVICE_CHECK_RESULT;{host};{service_name_for_test_notification};2;Daily Test Notification from SMS Config"
+    cmd_os = f"""{os.getenv('OMD_ROOT')}/bin/lq "COMMAND [{int(time())}] {cmd}" """
+    os.system(cmd_os)
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    CONFIG_FILE = Path(cmk_paths.var_dir + "/sms-notifications.conf")
+    args = parse_arguments(argv)
+    if CONFIG_FILE.is_file():
+        with open(CONFIG_FILE, "r") as f:
+            notification_config = f.read()
+        config_dict = literal_eval(notification_config)
+        hosts = list(config_dict)
+        if args.include:
+            if args.v:
+                print(f"Include only CGs: {args.include.replace(',',', ')}")
+            for cg in args.include.split(","):
+                if cg in hosts:
+                    if args.v:
+                        print(f"Trigger SMS to {cg}")
+                    send_sms(host=cg, service_name_for_test_notification=args.service_name)
+                elif not cg:
+                    continue
+                else:
+                    print(f"{cg} - not in SMS CONFIG, Possible values are: {', '.join(hosts)}")
+        else:
+            if args.exclude:
+                exclude = [i for i in args.exclude.split(",") if i]
+            else:
+                exclude = None
+            for host in hosts:
+                if exclude and host in exclude:
+                    print(f"{host} - is in exclude, did not trigger SMS")
+                    continue
+                if args.v:
+                    print(f"Trigger SMS to {host}")
+                send_sms(host=host, service_name_for_test_notification=args.service_name)
+        return 0
+    else:
+        print("Could not get Config file")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
