@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import configparser
 import os
 import re
 import subprocess
 import sys
+from ast import literal_eval
 
 
-def run_query(cmd, query, dbname, query_timeout=20):
+def run_query(cmd: str, query: str | None, query_timeout: int = 20) -> str:
     total_cmd = cmd + query if query else cmd
-    result = subprocess.run(total_cmd, shell=False, stdout=subprocess.PIPE, timeout=query_timeout)
+    result = subprocess.run(
+        total_cmd, check=False, shell=False, stdout=subprocess.PIPE, timeout=query_timeout
+    )
     if result.stderr:
         print(result.stderr.decode("utf-8"))
     return result.stdout.decode("utf-8")
@@ -18,17 +20,11 @@ def run_query(cmd, query, dbname, query_timeout=20):
 
 def parse_config_file():
     MK_CONFDIR = os.getenv("MK_CONFDIR") or "/etc/check_mk"
-    config_file = f"{MK_CONFDIR}/maxdb.cfg"
+    config_file = MK_CONFDIR + "/maxdb.cfg"
     config = configparser.ConfigParser()
     config.read(config_file)
-    if not config:
-        print("<<<Check_MK>>>")
-        print("Missing Config file for MaxDB Plugin")
-        sys.exit(2)
     sections_dict = {}
     sections = config.sections()
-    if not sections:
-        sys.exit(2)
     for section in sections:
         options = config.options(section)
         temp_dict = {}
@@ -62,7 +58,7 @@ def main():
         ],
     }
     for key, value in config.items():
-        run_checks = eval(value.get("modules", "['state']"))
+        run_checks = literal_eval(value.get("modules", "['state']"))
         cmd = value.get("cmd_tool", f"/sapdb/{key}/db/bin/dbmcli")
         if not re.search(r"^\/[a-zA-Z_0-9_.-\/]*\/bin\/dbmcli$", cmd):
             print(f"Stop Plugin, hence {cmd} does not match Regex")
@@ -77,7 +73,6 @@ def main():
                         run_query(
                             cmd=cmd_line,
                             query=query,
-                            dbname=key,
                             query_timeout=int(value.get("timeout", "20")),
                         )
                     )
@@ -86,7 +81,6 @@ def main():
                         run_query(
                             cmd=["/sapdb/programs/bin/sdbregview", "-l"],
                             query=None,
-                            dbname=key,
                             query_timeout=int(value.get("timeout", "20")),
                         )
                     )
