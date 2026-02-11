@@ -1,12 +1,10 @@
 title: Rubrik Node Disk Status: General Information
-agents: rubrik
-author: Marcus Klein ITeratio GmbH
+agents: Rubrik
 catalog: hw/storagehw/Rubrik
 license: GPLv3
-distribution: CRE, CEE
+distribution: check_mk
 description:
  This check yields the Rubrik disks as filesystem compatible services.
-item:
- Rubrik Disk
-discovery:
+ The check monitors the health and status of individual disks in Rubrik nodes.
+inventory:
  One service per Rubrik disk is created.

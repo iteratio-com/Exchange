@@ -1,21 +1,41 @@
 #!/usr/bin/env python3
-# -*- encoding: utf-8; py-indent-offset: 4 -*-
 
-# 2023, marcus.klein@iteratio.com
+from ast import literal_eval
+from typing import Any
 
-from .agent_based_api.v1 import HostLabel, Result, Service, State, register
-from .agent_based_api.v1.type_defs import CheckResult, DiscoveryResult, HostLabelGenerator
-from .utils.rubrik_api import RubrikSection, parse_rubrik
+from cmk.agent_based.v2 import (
+    AgentSection,
+    CheckPlugin,
+    CheckResult,
+    DiscoveryResult,
+    HostLabel,
+    HostLabelGenerator,
+    Result,
+    Service,
+    State,
+    StringTable,
+)
+
+RubrikSection = dict[str, Any]
+
+
+def parse_rubrik_single(string_table: StringTable) -> RubrikSection:
+    """Parse single rubrik node section."""
+    try:
+        out = literal_eval("".join([i[0] for i in string_table]))
+        return out if isinstance(out, dict) else {}
+    except (ValueError, SyntaxError):
+        return {}
 
 
 def host_label_rubrik_node(section: RubrikSection) -> HostLabelGenerator:
-    if section.get("brikId"):
+    if section and section.get("brikId"):
         yield HostLabel("rubrikDevice", "node")
 
 
-register.agent_section(
+agent_section_rubrik_node = AgentSection(
     name="rubrik_node",
-    parse_function=parse_rubrik,
+    parse_function=parse_rubrik_single,
     host_label_function=host_label_rubrik_node,
 )
 
@@ -35,12 +55,12 @@ def check_rubrik_cluster_node(section: RubrikSection) -> CheckResult:
         details=f"IP: {section['ipAddress']}\nbrikId: {section['brikId']}",
     )
     yield Result(
-        state=State.OK if section["hasUnavailableDisks"] == False else State.CRIT,
+        state=State.OK if not section["hasUnavailableDisks"] else State.CRIT,
         summary=f"Unavailable disks: {section['hasUnavailableDisks']}",
     )
 
 
-register.check_plugin(
+check_plugin_rubrik_node = CheckPlugin(
     name="rubrik_node",
     service_name="Rubrik Node Status",
     discovery_function=discover_rubrik_cluster_node,
