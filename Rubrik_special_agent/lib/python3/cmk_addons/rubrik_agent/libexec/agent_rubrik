@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-# -*- encoding: utf-8; py-indent-offset: 4 -*-
 
-# 2023, marcus.klein@iteratio.com
+from __future__ import annotations
 
 import argparse
 import sys
-from typing import NoReturn, Optional
+from typing import Any
 
 import cmk.utils.password_store
 import requests
+import urllib3
+from urllib3.exceptions import InsecureRequestWarning
 
 cmk.utils.password_store.replace_passwords()
+urllib3.disable_warnings(InsecureRequestWarning)
 
 
 sections = [
@@ -28,18 +30,20 @@ class RubrikRestApi:
         hostname: str,
         username: str,
         password: str,
-        verify: Optional[bool] = False,
-    ):
+        *,
+        verify: bool = False,
+    ) -> None:
+        """Provide a simple helper around the Rubrik REST API."""
         self.base_rubrik_url = f"https://{hostname}/api/"
-        self.session = None
+        self.session: requests.Session | None = None
         self.verify = verify
         if not self.verify:
-            requests.packages.urllib3.disable_warnings()
+            urllib3.disable_warnings(InsecureRequestWarning)
         self.username = username
         self.password = password
-        self.token = None
+        self.token: str | None = None
 
-    def login(self) -> NoReturn:
+    def login(self) -> None:
         self.session = requests.Session()
         self.session.headers["accept"] = "application/json"
         try:
@@ -48,55 +52,51 @@ class RubrikRestApi:
                 json={"serviceAccountId": self.username, "secret": self.password},
                 verify=self.verify,
             )
-        except Exception as e:
-            sys.stderr.write(f"Request error: {e}")
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            sys.stderr.write(f"Request error: {exc}")
             sys.exit(1)
 
-        # response = {
-        #     "cause": None,
-        #     "errorType": "user_error",
-        #     "message": "Max of 10 API Tokens reached.",
-        # }
-
-        if response.json().get("errorType") == "user_error":
-            sys.stderr.write(f"Login error: {response.json().get('message')}")
+        response_json = response.json()
+        if response_json.get("errorType") == "user_error":
+            sys.stderr.write(f"Login error: {response_json.get('message')}")
             sys.exit(1)
 
-        self.token = response.json().get("token")
+        self.token = response_json.get("token")
         self.session.headers.update(
             {
                 "Authorization": f"Bearer {self.token}",
-            }
+            },
         )
 
     def delete_token(self) -> int:
-        if self.token:
-            try:
-                r = self.session.delete(
-                    url=f"{self.base_rubrik_url}v1/session/me", verify=self.verify
-                )
-                # print(f"Token successful deleted: status code: {r.status_code}")
-            except Exception as e:
-                # sys.stderr.write(f"Could not delete token delete status code: {r.status_code}")
-                sys.stderr.write(f"Token delete error: {e}")
-                return 1
+        if not self.token or not self.session:
+            return 0
+
+        try:
+            self.session.delete(url=f"{self.base_rubrik_url}v1/session/me", verify=self.verify)
+        except requests.RequestException as exc:
+            sys.stderr.write(f"Token delete error: {exc}")
+            return 1
         return 0
 
-    def get_endpoint_data(self, endpoint: str) -> dict:
+    def get_endpoint_data(self, endpoint: str) -> dict[str, Any]:
+        if not self.session:
+            return {}
         try:
-            r = self.session.get(url=f"{self.base_rubrik_url}{endpoint}", verify=self.verify)
-        except Exception as e:
-            print(f"Request error: {e}")
+            response = self.session.get(url=f"{self.base_rubrik_url}{endpoint}", verify=self.verify)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            print(f"Request error: {exc}")
+            return {}
 
         try:
-            data = r.json()
-        except:
-            data = {}
-
-        return data
+            return response.json()
+        except ValueError:
+            return {}
 
 
-def parse_arguments(argv=None) -> argparse.Namespace:
+def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--user", help="User Name for API Calls", required=True)
     parser.add_argument("--secret", help="Secret of User", required=True)
@@ -115,7 +115,7 @@ def parse_arguments(argv=None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = parse_arguments(argv)
     api = RubrikRestApi(
         username=args.user,

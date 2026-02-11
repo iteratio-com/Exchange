@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
-# -*- encoding: utf-8; py-indent-offset: 4 -*-
-
-# 2023, marcus.klein@iteratio.com
-
-from typing import Any, Mapping
-
-from .agent_based_api.v1 import Result, Service, State, get_value_store, register
-from .agent_based_api.v1.type_defs import CheckResult, DiscoveryResult, StringTable
-from .utils.df import FILESYSTEM_DEFAULT_PARAMS, df_check_filesystem_single
-from .utils.rubrik_api import RubrikSection
 
 from ast import literal_eval
+from collections.abc import Mapping
+from typing import Any
+
+from cmk.agent_based.v2 import (
+    AgentSection,
+    CheckPlugin,
+    CheckResult,
+    DiscoveryResult,
+    Result,
+    Service,
+    State,
+    StringTable,
+    get_value_store,
+)
+from cmk.plugins.lib.df import FILESYSTEM_DEFAULT_PARAMS, df_check_filesystem_single
+
+from .utils.rubrik_api import RubrikSection
 
 
 def parse_rubrik_node_disk(string_table: StringTable) -> RubrikSection:
@@ -19,11 +26,11 @@ def parse_rubrik_node_disk(string_table: StringTable) -> RubrikSection:
         out += [literal_eval(elem[0])]
 
     if not out:
-        return
+        return {}
     return {disk["id"]: disk for disk in out}
 
 
-register.agent_section(
+agent_section_rubrik_node_disk = AgentSection(
     name="rubrik_node_disk",
     parse_function=parse_rubrik_node_disk,
 )
@@ -34,9 +41,7 @@ def discover_rubrik_node_disk(section: RubrikSection) -> DiscoveryResult:
         yield Service(item=disk)
 
 
-def check_rubrik_node_disk(
-    item: str, params: Mapping[str, Any], section: RubrikSection
-) -> CheckResult:
+def check_rubrik_node_disk(item: str, params: Mapping[str, Any], section: RubrikSection) -> CheckResult:
     if not (disk := section.get(item)):
         return
 
@@ -57,16 +62,16 @@ def check_rubrik_node_disk(
         details=f"Mountpoint: {disk['path']}",
     )
     yield Result(
-        state=State.OK if disk["isDegraded"] == False else State.CRIT,
+        state=State.OK if not disk["isDegraded"] else State.CRIT,
         summary=f"Degraded: {disk['isDegraded']}",
     )
     yield Result(
-        state=State.OK if disk["isEncrypted"] == True else State.WARN,
+        state=State.OK if disk["isEncrypted"] else State.WARN,
         summary=f"Encrypted: {disk['isEncrypted']}",
     )
 
 
-register.check_plugin(
+check_plugin_rubrik_node_disk = CheckPlugin(
     name="rubrik_node_disk",
     service_name="Rubrik Disk %s",
     discovery_function=discover_rubrik_node_disk,

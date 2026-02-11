@@ -1,19 +1,29 @@
 #!/usr/bin/env python3
-# -*- encoding: utf-8; py-indent-offset: 4 -*-
 
-# 2023, marcus.klein@iteratio.com
+from collections.abc import Mapping
+from typing import Any
 
-from .agent_based_api.v1 import Result, Service, State, register
-from .agent_based_api.v1.type_defs import CheckResult, DiscoveryResult, StringTable
+from cmk.agent_based.v2 import (
+    AgentSection,
+    CheckPlugin,
+    CheckResult,
+    DiscoveryResult,
+    Result,
+    Service,
+    State,
+    StringTable,
+)
+
 from .utils.rubrik_api import RubrikSection
 
 
 def parse_rubrik_node_hardware_health(string_table: StringTable) -> RubrikSection:
     out = {}
     title = ""
-    for line in string_table:
-        line = line[0]
-        if len(line.split(":")) == 2 and line.split(":")[1]:
+    last_key = {"SSD Life-Left": False}
+    for table_line in string_table:
+        line = table_line[0]
+        if len(line.split(":")) == 2 and line.split(":")[1]:  # noqa: PLR2004
             key, value = line.split(":")
             if value:
                 out[key.strip()] = value.strip()
@@ -21,22 +31,36 @@ def parse_rubrik_node_hardware_health(string_table: StringTable) -> RubrikSectio
         if line.startswith("Checking ") and line.endswith("for errors."):
             title = line.split()[1] + "_errors"
             out.setdefault(title, [])
+            last_key["SSD Life-Left"] = False
             continue
         if line.startswith("FRU Replacement Summary:"):
             title = "FRU"
             out.setdefault(title, [])
+            last_key["SSD Life-Left"] = False
             continue
-
         if line.startswith("-----"):
             title = ""
+            last_key["SSD Life-Left"] = False
+            continue
+        if line.startswith("Disk Device") and line.endswith("SSD Life-Left"):
+            title = "SSD Life-Left"
+            out.setdefault(title, [])
+            last_key["SSD Life-Left"] = True
+            continue
+        if line.startswith("/dev/sd") and last_key["SSD Life-Left"]:
+            device = line.split("|")[0].strip()
+            percentage = line.split("|")[-1].strip()
+            out[title].append((device, percentage.replace("%", "").strip()))
             continue
         if title:
             out[title].append(line.strip())
 
+        last_key["SSD Life-Left"] = False
+
     return out
 
 
-register.agent_section(
+agent_section_rubrik_node_hardware_health = AgentSection(
     name="rubrik_node_hardware_health",
     parse_function=parse_rubrik_node_hardware_health,
 )
@@ -47,7 +71,7 @@ def discover_node_hardware_health(section: RubrikSection) -> DiscoveryResult:
         yield Service()
 
 
-def check_node_hardware_health(section: RubrikSection) -> CheckResult:
+def check_node_hardware_health(params: Mapping[str, Any], section: RubrikSection) -> CheckResult:  # noqa: ARG001
     if not section:
         return
 
@@ -76,18 +100,22 @@ def check_node_hardware_health(section: RubrikSection) -> CheckResult:
 
     yield Result(
         state=State.CRIT if defect_disks["errors"] else State.OK,
-        details=f"Defect disks: {', '.join(defect_disks['errors'])}"
-        if defect_disks["errors"]
-        else "No defect disks",
-        summary=f"{len(defect_disks['ok'])} disks are okay"
-        if not defect_disks["errors"]
-        else "see errors of disks in details",
+        details=(f"Defect disks: {', '.join(defect_disks['errors'])}" if defect_disks["errors"] else "No defect disks"),
+        summary=(
+            f"{len(defect_disks['ok'])} disks are okay"
+            if not defect_disks["errors"]
+            else "see errors of disks in details"
+        ),
     )
 
 
-register.check_plugin(
+check_plugin_rubrik_node_hardware_health = CheckPlugin(
     name="rubrik_node_hardware_health",
     service_name="Rubrik Node Hardware Health",
     discovery_function=discover_node_hardware_health,
     check_function=check_node_hardware_health,
+    check_ruleset_name="rubrik_node_hardware_status",
+    check_default_parameters={
+        "percent_ssd_life_left": (50, 10),
+    },
 )

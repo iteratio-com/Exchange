@@ -26,6 +26,7 @@ Therefore it is recommended to use the *Dynamic Host Configuration* to create th
 
 * The (deprecated) version for 2.1.0 is `rubrik_agent-0.9.3.mkp`.
 * Current version for 2.2.0 is `rubrik_agent-1.2.3.mkp`.
+* Current version for 2.3.0 and 2.4.0 is `rubrik_agent-1.4.2.mkp`.
 
 ## Thanks!
 
@@ -60,3 +61,7 @@ Thanks to my colleague Mathias for supporting me by giving hints and and treatin
 * 1.2.1 Delete token in any case at the end
 * 1.2.2 Catching if tokens are used
 * 1.2.3 Agent error into Check\_MK service output
+* 1.3.0 FIX: Ignoring SSD life left output in node hardware status for now
+* 1.4.0 Ported to Checkmk 2.4.0
+* 1.4.1 added migration function for existing rulesets
+* 1.4.2 Refactored code and cleaned up
