@@ -26,7 +26,7 @@ Therefore it is recommended to use the *Dynamic Host Configuration* to create th
 
 * The (deprecated) version for 2.1.0 is `rubrik_agent-0.9.3.mkp`.
 * Current version for 2.2.0 is `rubrik_agent-1.2.3.mkp`.
-* Current version for 2.3.0 and 2.4.0 is `rubrik_agent-1.4.2.mkp`.
+* Current version for 2.3.0 and 2.4.0 is `rubrik_agent-1.4.3.mkp`.
 
 ## Thanks!
 
@@ -65,3 +65,4 @@ Thanks to my colleague Mathias for supporting me by giving hints and and treatin
 * 1.4.0 Ported to Checkmk 2.4.0
 * 1.4.1 added migration function for existing rulesets
 * 1.4.2 Refactored code and cleaned up
+* 1.4.3 Set minimum required version to 2.3.0b1
