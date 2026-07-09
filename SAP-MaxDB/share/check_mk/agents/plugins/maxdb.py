@@ -63,7 +63,17 @@ def main():
         if not re.search(r"^\/[a-zA-Z_0-9_.-\/]*\/bin\/dbmcli$", cmd):
             print(f"Stop Plugin, hence {cmd} does not match Regex")
             sys.exit(2)
-        cmd_line = [cmd, "-d", key, "-u", f"{value.get('user')},{value.get('password')}"]
+        # Authentication: prefer an XUSER key (dbmcli -U <key>) so that no
+        # plaintext credentials are needed in maxdb.cfg. Fall back to the
+        # classic -d <db> -u <user,password> if no xuser_key is configured.
+        xuser_key = value.get("xuser_key")
+        if xuser_key:
+            if not re.search(r"^[A-Za-z0-9_.-]+$", xuser_key):
+                print(f"Stop Plugin, hence xuser_key {xuser_key} does not match Regex")
+                sys.exit(2)
+            cmd_line = [cmd, "-U", xuser_key]
+        else:
+            cmd_line = [cmd, "-d", key, "-u", f"{value.get('user')},{value.get('password')}"]
         for check, queries in known_querys.items():
             if check in run_checks:
                 print(f"<<<maxdb_{check}>>>")
