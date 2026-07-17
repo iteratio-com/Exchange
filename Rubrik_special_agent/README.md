@@ -5,7 +5,7 @@
 **IMPORTANT: Migration from CSM to RSC**
 The agent has been transitioned from the legacy CSM to the RSC GraphQL-only mode. Because of this architectural change, **existing rules must be recreated**.
 
-The agent connects via REST API to a Rubrik Cluster and creates piggyback data for nodes, including the following services:
+The agent connects via GraphQL to the Rubrik Service Cloud (RSC) and creates piggyback data for nodes, including the following services:
 * Cluster System Status
 * Compliance 24 Hours (cluster-side)
 * Disk
