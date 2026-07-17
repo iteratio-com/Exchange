@@ -12,24 +12,51 @@ from pydantic import BaseModel
 
 
 class RubrikParams(BaseModel):
-    user: str
-    secret: Secret
+    client_id: str
+    client_secret: Secret
+    access_token_uri: str
+    cluster_selector: tuple[str, str] | None = None
+    cluster_name: str | None = None
+    cluster_uuid: str | None = None
+    disable_ssl_verification: bool | None = None
     verify_ssl: bool | None = None
     sections: list[str] | None = None
+
+
+def _selector_arguments(params: RubrikParams) -> list[str]:
+    if params.cluster_selector:
+        selector_type, selector_value = params.cluster_selector
+        if selector_type == "cluster_name":
+            return ["--cluster-name", selector_value]
+        if selector_type == "cluster_uuid":
+            return ["--cluster-uuid", selector_value]
+
+    if params.cluster_uuid:
+        return ["--cluster-uuid", params.cluster_uuid]
+    if params.cluster_name:
+        return ["--cluster-name", params.cluster_name]
+
+    return []
 
 
 def _agent_arguments(params: RubrikParams, host_config: HostConfig) -> Iterator[SpecialAgentCommand]:
     """Generate command arguments for the Rubrik special agent."""
     args = [
-        "--user",
-        params.user,
-        "--secret",
-        params.secret.unsafe(),
-        "--hostname",
-        host_config.name,
+        "--client-id",
+        params.client_id,
+        "--client-secret",
+        params.client_secret,
+        "--access-token-uri",
+        params.access_token_uri,
+        * _selector_arguments(params),
     ]
 
-    if params.verify_ssl:
+    if host_config.name:
+        args.extend(["--hostname", host_config.name])
+
+    if params.disable_ssl_verification is True or params.verify_ssl is False:
+        args.append("--no-verify-ssl")
+    else:
         args.append("--verify_ssl")
 
     if params.sections:
@@ -38,7 +65,6 @@ def _agent_arguments(params: RubrikParams, host_config: HostConfig) -> Iterator[
     yield SpecialAgentCommand(command_arguments=args)
 
 
-# Define the special agent configuration using SpecialAgentConfig.
 special_agent_rubrik = SpecialAgentConfig(
     name="rubrik",
     parameter_parser=RubrikParams.model_validate,

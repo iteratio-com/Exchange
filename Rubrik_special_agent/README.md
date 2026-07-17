@@ -2,20 +2,18 @@
 
 ## Function
 
-Will connect via REST-Api to a Rubrik-Cluster and create piggyback data for nodes and including the following services.
+**IMPORTANT: Migration from CSM to RSC**
+The agent has been transitioned from the legacy CSM to the RSC GraphQL-only mode. Because of this architectural change, **existing rules must be recreated**.
 
-Therefore it is recommended to use the *Dynamic Host Configuration* to create the nodes as hosts.
-
-### Cluster sided services
-
+The agent connects via REST API to a Rubrik Cluster and creates piggyback data for nodes, including the following services:
 * Cluster System Status
-* Compliance 24 Hours
-  
-### Node sided services
-
-* Node Disk
+* Compliance 24 Hours (cluster-side)
+* Disk
 * Node Hardware Health
-* Node Status
+* Node Status (node-side)
+* Bandwidth
+
+It is highly recommended to use the **Dynamic Host Configuration** to automatically create the nodes as hosts.
 
 ## Discovered labels
 
@@ -26,7 +24,8 @@ Therefore it is recommended to use the *Dynamic Host Configuration* to create th
 
 * The (deprecated) version for 2.1.0 is `rubrik_agent-0.9.3.mkp`.
 * Current version for 2.2.0 is `rubrik_agent-1.2.3.mkp`.
-* Current version for 2.3.0 and 2.4.0 is `rubrik_agent-1.4.3.mkp`.
+* Current version for 2.3.0 and 2.4.0 using instance based CDM is `rubrik_agent-1.4.3.mkp`.
+* Current version for 2.3.0 and 2.4.0 using cloud based RSC is `rubrik_agent-1.5.2.mkp`.
 
 ## Thanks!
 
@@ -34,35 +33,39 @@ Thanks to my colleague Mathias for supporting me by giving hints and and treatin
 
 ## Changelog
 
-* 0.1.0 initial version
-* 0.2.0 Agent works
-* 0.3.0 added some endpoints
-* 0.3.1 some more endpoints added
-* 0.4.0 Piggyback output
-* 0.4.5 System Status Check
-* 0.5.0 Hardware health for partitions and FRUS
-* 0.6.0 Disk check
-* 0.6.1 Default values cleaned
-* 0.7.0 Node check, host label rubrikNode:yes, compliance report check
-* 0.8.0 Normalized namings
-* 0.9.0 Filesystem levels
-* 0.9.2 Description updated
-* 0.9.3 Import fixed
-* 0.9.5 Typings added by mgo
-* 0.9.6 Checkmk 2.2.0 compatibility
-* 0.9.7 Hardware health parsing adjusted
-* 0.9.8 Threshholds for snapshots added
-* 0.9.9 Metrics for compliance report service added
-* 1.0.0 Small patches
-* 1.1.0 Consolidated agent endpoint requests
-* 1.1.1 Node disk status parser fixed
-* 1.1.2 Added checks man pages
-* 1.2.0 Added service choices
-* 1.2.1 Delete token in any case at the end
-* 1.2.2 Catching if tokens are used
-* 1.2.3 Agent error into Check\_MK service output
-* 1.3.0 FIX: Ignoring SSD life left output in node hardware status for now
+* 0.1.0 Initial version
+* 0.2.0 Special agent operational
+* 0.3.0 Added additional API endpoints
+* 0.3.1 Added further API endpoints
+* 0.4.0 Added piggyback output
+* 0.4.5 Added System Status check
+* 0.5.0 Added hardware health monitoring for partitions and FRUs
+* 0.6.0 Added Disk check
+* 0.6.1 Cleaned up default values
+* 0.7.0 Added Node Status and Compliance Report checks
+* 0.8.0 Normalized naming
+* 0.9.0 Added filesystem levels
+* 0.9.2 Updated description
+* 0.9.3 Fixed import
+* 0.9.5 Added type annotations by mgo
+* 0.9.6 Added Checkmk 2.2.0 compatibility
+* 0.9.7 Adjusted hardware health parsing
+* 0.9.8 Added snapshot thresholds
+* 0.9.9 Added metrics for the Compliance Report service
+* 1.0.0 Applied minor patches
+* 1.1.0 Consolidated special agent endpoint requests
+* 1.1.1 Fixed node disk status parser
+* 1.1.2 Added check man pages
+* 1.2.0 Added service selection options
+* 1.2.1 Ensured tokens are deleted after execution
+* 1.2.2 Added handling for tokens that are already in use
+* 1.2.3 Added special agent errors to the Check_MK service output
+* 1.3.0 Temporarily ignored SSD life-left output in Node Hardware Health
 * 1.4.0 Ported to Checkmk 2.4.0
-* 1.4.1 added migration function for existing rulesets
-* 1.4.2 Refactored code and cleaned up
-* 1.4.3 Set minimum required version to 2.3.0b1
+* 1.4.1 Added a migration function for existing rulesets
+* 1.4.2 Refactored and cleaned up the code
+* 1.4.3 Set the minimum required Checkmk version to 2.3.0b1
+* 1.4.3-p1 Added graphing/rubrik.py for filesystem metric df_translation.
+* 1.5.0 Switched the Rubrik special agent to RSC GraphQL-only mode, added mandatory cluster selection by cluster name or UUID, added secure password-store secret resolution, ensured RSC session tokens are deleted after use, enabled SSL certificate verification by default with explicit opt-out support, fixed degraded disk mapping for raidStatus values None and OPTIMAL, improved Node Hardware Health policy details, and fixed singleton section parsing for duplicate piggyback sources.
+* 1.5.1 Added Rubrik Bandwidth check
+* 1.5.2 Fixed the section list in the special agent rule

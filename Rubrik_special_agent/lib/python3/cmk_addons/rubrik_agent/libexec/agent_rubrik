@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 import cmk.utils.password_store
 import requests
@@ -14,155 +16,604 @@ from urllib3.exceptions import InsecureRequestWarning
 cmk.utils.password_store.replace_passwords()
 urllib3.disable_warnings(InsecureRequestWarning)
 
-
-sections = [
+SECTIONS = [
     "cluster_system_status",
     "cluster_compliance_status",
+    "bandwidth",
     "node_status",
     "node_disk_status",
     "node_hardware_health",
 ]
 
+DEFAULT_TIMEOUT = 30
+PAGE_SIZE = 200
 
-class RubrikRestApi:
+LIST_CLUSTERS_QUERY = """
+query ListClusters($first: Int!, $after: String, $filter: ClusterFilterInput) {
+  clusterConnection(first: $first, after: $after, filter: $filter) {
+    count
+    nodes {
+      id
+      name
+      defaultAddress
+      version
+      status
+      systemStatus
+      isHealthy
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+"""
+
+CLUSTER_SUMMARY_QUERY = """
+query ClusterSummary($clusterUuid: UUID!) {
+  cluster(clusterUuid: $clusterUuid) {
+    id
+    name
+    status
+    systemStatus
+    systemStatusMessage
+    systemStatusAffectedNodes {
+      id
+      hostname
+    }
+  }
+}
+"""
+
+CLUSTER_NODES_STATUS_QUERY = """
+query ClusterNodesStatus($clusterUuid: String!) {
+  clusterNodes(input: {clusterUuid: $clusterUuid}) {
+    data {
+      id
+      hostname
+      ipAddress
+      brikId
+      status
+      hasUnavailableDisks
+    }
+  }
+}
+"""
+
+CLUSTER_NODE_HEALTH_QUERY = """
+query ClusterNodeHealth($clusterUuid: UUID!, $first: Int!, $after: String) {
+  cluster(clusterUuid: $clusterUuid) {
+    clusterNodeConnection(first: $first, after: $after) {
+      nodes {
+        id
+        hostname
+        hardwareHealth {
+          policyName
+          isHealthy
+          message
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+"""
+
+CLUSTER_DISKS_QUERY = """
+query ClusterDisks($clusterUuid: UUID!, $first: Int!, $after: String) {
+  cluster(clusterUuid: $clusterUuid) {
+    clusterDiskConnection(first: $first, after: $after) {
+      nodes {
+        diskId
+        nodeId
+        path
+        capacityBytes
+        unallocatedBytes
+        isEncrypted
+        status
+        raidStatus
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+"""
+
+CLUSTER_COMPLIANCE_QUERY = """
+query ClusterCompliance($clusterUuid: UUID!, $first: Int!, $after: String) {
+  snappableConnection(
+    first: $first
+    after: $after
+    filter: {
+      cluster: {id: [$clusterUuid]}
+      isLocal: true
+    }
+  ) {
+    count
+    nodes {
+      complianceStatus
+      awaitingFirstFull
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+"""
+
+CLUSTER_BANDWIDTH_QUERY = """
+query ClusterBandwidth($clusterUuid: String!, $range: String!) {
+  replicationOutgoingStats(input: {clusterUuid: $clusterUuid, range: $range}) {
+    items {
+      stat
+      time
+    }
+  }
+}
+"""
+
+
+class RubrikApiError(RuntimeError):
+    pass
+
+
+def _resolve_secret_reference(secret: str) -> str:
+    if ":/" not in secret:
+        return secret
+
+    password_id, password_file = secret.split(":", 1)
+    password_store_file = Path(password_file)
+    if not password_id or not password_store_file.is_absolute() or not password_store_file.exists():
+        return secret
+
+    try:
+        return cmk.utils.password_store.lookup(password_store_file, password_id)
+    except ValueError as exc:
+        raise RubrikApiError(f"Unable to resolve password store reference {secret}: {exc}") from exc
+
+
+class RubrikRscApi:
     def __init__(
         self,
-        hostname: str,
-        username: str,
-        password: str,
+        hostname: str | None,
+        client_id: str,
+        client_secret: str,
+        access_token_uri: str,
         *,
+        cluster_name: str | None = None,
+        cluster_uuid: str | None = None,
         verify: bool = False,
     ) -> None:
-        """Provide a simple helper around the Rubrik REST API."""
-        self.base_rubrik_url = f"https://{hostname}/api/"
-        self.session: requests.Session | None = None
+        self.hostname = hostname
+        self.cluster_name = cluster_name
+        self.cluster_uuid = cluster_uuid
+        self.access_token_uri = access_token_uri.rstrip("/")
+        self.rsc_base_url = self._derive_rsc_base_url(self.access_token_uri)
+        self.graphql_url = f"{self.rsc_base_url}/api/graphql"
         self.verify = verify
+        self.client_id = client_id
+        self.client_secret = _resolve_secret_reference(client_secret)
+        self.token: str | None = None
+        self.session = requests.Session()
+        self.session.headers.update({"accept": "application/json"})
+        self.selected_cluster: dict[str, Any] | None = None
+
         if not self.verify:
             urllib3.disable_warnings(InsecureRequestWarning)
-        self.username = username
-        self.password = password
-        self.token: str | None = None
+
+    @staticmethod
+    def _derive_rsc_base_url(access_token_uri: str) -> str:
+        parsed = urlparse(access_token_uri)
+        if not parsed.scheme or not parsed.netloc:
+            raise RubrikApiError(f"Invalid access token URI: {access_token_uri}")
+
+        return urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))
 
     def login(self) -> None:
-        self.session = requests.Session()
-        self.session.headers["accept"] = "application/json"
         try:
             response = self.session.post(
-                url=f"{self.base_rubrik_url}v1/service_account/session",
-                json={"serviceAccountId": self.username, "secret": self.password},
+                url=self.access_token_uri,
+                json={
+                    "grant_type": "client_credentials",
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                },
+                headers={
+                    "accept": "application/json",
+                    "content-type": "application/json",
+                },
                 verify=self.verify,
+                timeout=DEFAULT_TIMEOUT,
             )
             response.raise_for_status()
         except requests.RequestException as exc:
-            sys.stderr.write(f"Request error: {exc}")
-            sys.exit(1)
+            raise RubrikApiError(f"RSC token request failed: {exc}") from exc
 
-        response_json = response.json()
-        if response_json.get("errorType") == "user_error":
-            sys.stderr.write(f"Login error: {response_json.get('message')}")
-            sys.exit(1)
+        try:
+            response_json = response.json()
+        except ValueError as exc:
+            raise RubrikApiError("RSC token request returned invalid JSON") from exc
 
-        self.token = response_json.get("token")
-        self.session.headers.update(
-            {
-                "Authorization": f"Bearer {self.token}",
-            },
-        )
+        if not (access_token := response_json.get("access_token")):
+            details = response_json.get("message") or response_json.get("error_description") or response_json
+            raise RubrikApiError(f"RSC token request did not return an access token: {details}")
+
+        self.token = access_token
+        self.session.headers.update({"Authorization": f"Bearer {access_token}"})
 
     def delete_token(self) -> int:
-        if not self.token or not self.session:
+        if not self.token:
+            self.session.close()
             return 0
 
         try:
-            self.session.delete(url=f"{self.base_rubrik_url}v1/session/me", verify=self.verify)
+            response = self.session.delete(
+                url=f"{self.rsc_base_url}/api/session",
+                verify=self.verify,
+                timeout=DEFAULT_TIMEOUT,
+            )
+            if response.status_code not in (200, 204):
+                sys.stderr.write(
+                    f"Token delete error: unexpected status code {response.status_code} from {self.rsc_base_url}/api/session\n"
+                )
+                return 1
         except requests.RequestException as exc:
-            sys.stderr.write(f"Token delete error: {exc}")
+            sys.stderr.write(f"Token delete error: {exc}\n")
             return 1
+        finally:
+            self.token = None
+            self.session.close()
+
         return 0
 
-    def get_endpoint_data(self, endpoint: str) -> dict[str, Any]:
-        if not self.session:
-            return {}
+    def graphql(self, query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
-            response = self.session.get(url=f"{self.base_rubrik_url}{endpoint}", verify=self.verify)
+            response = self.session.post(
+                url=self.graphql_url,
+                json={"query": query, "variables": variables or {}},
+                headers={
+                    "accept": "application/json",
+                    "content-type": "application/json",
+                },
+                verify=self.verify,
+                timeout=DEFAULT_TIMEOUT,
+            )
             response.raise_for_status()
         except requests.RequestException as exc:
-            print(f"Request error: {exc}")
-            return {}
+            raise RubrikApiError(f"GraphQL request failed: {exc}") from exc
 
         try:
-            return response.json()
-        except ValueError:
-            return {}
+            payload = response.json()
+        except ValueError as exc:
+            raise RubrikApiError("GraphQL request returned invalid JSON") from exc
+
+        if errors := payload.get("errors"):
+            raise RubrikApiError(f"GraphQL request returned errors: {errors}")
+
+        return payload.get("data", {})
+
+    def list_clusters(self, filter_input: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        clusters: list[dict[str, Any]] = []
+        after: str | None = None
+
+        while True:
+            variables: dict[str, Any] = {"first": PAGE_SIZE, "after": after}
+            if filter_input:
+                variables["filter"] = filter_input
+
+            connection = self.graphql(LIST_CLUSTERS_QUERY, variables).get("clusterConnection") or {}
+            clusters.extend(connection.get("nodes", []))
+
+            page_info = connection.get("pageInfo") or {}
+            if not page_info.get("hasNextPage"):
+                break
+            after = page_info.get("endCursor")
+            if not after:
+                break
+
+        return clusters
+
+    def resolve_cluster(self) -> dict[str, Any]:
+        if self.cluster_uuid:
+            matches = self.list_clusters({"id": [self.cluster_uuid]})
+        elif self.cluster_name:
+            matches = self.list_clusters({"name": [self.cluster_name]})
+        elif self.hostname:
+            short_name = self.hostname.split(".", 1)[0]
+            candidates = {self.hostname, short_name, short_name.upper(), short_name.lower()}
+            matches = [
+                cluster
+                for cluster in self.list_clusters()
+                if cluster.get("name") in candidates
+            ]
+        else:
+            matches = []
+
+        if not matches:
+            selector = self.cluster_uuid or self.cluster_name or self.hostname or "<none>"
+            raise RubrikApiError(f"No cluster found in RSC matching selector {selector}")
+        if len(matches) > 1:
+            details = ", ".join(f"{item.get('name')} ({item.get('id')})" for item in matches)
+            raise RubrikApiError(f"Multiple clusters matched selector {self.cluster_uuid or self.cluster_name or self.hostname}: {details}")
+
+        self.selected_cluster = matches[0]
+        return matches[0]
+
+    @property
+    def selected_cluster_uuid(self) -> str:
+        if not self.selected_cluster:
+            raise RubrikApiError("No Rubrik cluster has been resolved yet")
+        return str(self.selected_cluster["id"])
+
+    def get_cluster_system_status(self) -> dict[str, Any]:
+        cluster = self.graphql(CLUSTER_SUMMARY_QUERY, {"clusterUuid": self.selected_cluster_uuid}).get("cluster") or {}
+        return {
+            "status": cluster.get("systemStatus") or "UNKNOWN",
+            "message": cluster.get("systemStatusMessage") or "",
+            "affectedNodeIds": [
+                node.get("hostname") or node.get("id")
+                for node in cluster.get("systemStatusAffectedNodes") or []
+                if node.get("hostname") or node.get("id")
+            ],
+        }
+
+    def get_cluster_compliance_summary(self) -> dict[str, Any]:
+        total_protected = 0
+        awaiting_first_full = 0
+        in_compliance = 0
+        out_of_compliance = 0
+        after: str | None = None
+
+        while True:
+            payload = self.graphql(
+                CLUSTER_COMPLIANCE_QUERY,
+                {"clusterUuid": self.selected_cluster_uuid, "first": PAGE_SIZE, "after": after},
+            ).get("snappableConnection") or {}
+
+            total_protected = payload.get("count", total_protected)
+            for snappable in payload.get("nodes") or []:
+                if snappable.get("awaitingFirstFull"):
+                    awaiting_first_full += 1
+                status = (snappable.get("complianceStatus") or "").upper()
+                if status == "IN_COMPLIANCE":
+                    in_compliance += 1
+                elif status == "OUT_OF_COMPLIANCE":
+                    out_of_compliance += 1
+
+            page_info = payload.get("pageInfo") or {}
+            if not page_info.get("hasNextPage"):
+                break
+            after = page_info.get("endCursor")
+            if not after:
+                break
+
+        safe_total = total_protected or 1
+        percent_in = round((in_compliance / safe_total) * 100, 2) if total_protected else 0.0
+        percent_out = round((out_of_compliance / safe_total) * 100, 2) if total_protected else 0.0
+
+        return {
+            "totalProtected": total_protected,
+            "numberAwaitingFirstFull": awaiting_first_full,
+            "numberOfInComplianceSnapshots": in_compliance,
+            "percentInCompliance": percent_in,
+            "numberOfOutOfComplianceSnapshots": out_of_compliance,
+            "percentOutOfCompliance": percent_out,
+        }
+
+    def get_cluster_bandwidth(self) -> dict[str, Any]:
+        payload = self.graphql(
+            CLUSTER_BANDWIDTH_QUERY,
+            {"clusterUuid": self.selected_cluster_uuid, "range": "-1h"},
+        ).get("replicationOutgoingStats") or {}
+        samples = payload.get("items") or []
+        values = []
+        for sample in samples:
+            try:
+                values.append(int(sample.get("stat") or 0))
+            except (TypeError, ValueError):
+                continue
+        average = int(sum(values) / len(values)) if values else 0
+        return {"archiveAvgBytesPerSecondLastHour": average}
+
+    def get_cluster_nodes_status(self) -> list[dict[str, Any]]:
+        data = self.graphql(CLUSTER_NODES_STATUS_QUERY, {"clusterUuid": self.selected_cluster_uuid}).get("clusterNodes") or {}
+        return list(data.get("data") or [])
+
+    def get_cluster_disk_status(self) -> list[dict[str, Any]]:
+        disks: list[dict[str, Any]] = []
+        after: str | None = None
+
+        while True:
+            cluster = self.graphql(
+                CLUSTER_DISKS_QUERY,
+                {"clusterUuid": self.selected_cluster_uuid, "first": PAGE_SIZE, "after": after},
+            ).get("cluster") or {}
+            connection = cluster.get("clusterDiskConnection") or {}
+            for disk in connection.get("nodes") or []:
+                raid_status = (disk.get("raidStatus") or "NONE").upper()
+                disks.append(
+                    {
+                        "id": disk.get("diskId"),
+                        "nodeId": disk.get("nodeId"),
+                        "path": disk.get("path"),
+                        "capacityBytes": disk.get("capacityBytes") or 0,
+                        "unallocatedBytes": disk.get("unallocatedBytes") or 0,
+                        "isEncrypted": disk.get("isEncrypted", False),
+                        "status": disk.get("status") or "UNKNOWN",
+                        "raidStatus": raid_status,
+                        "isDegraded": raid_status in {"DEGRADED", "OFFLINE", "READY_TO_REBUILD", "REBUILDING"},
+                    }
+                )
+
+            page_info = connection.get("pageInfo") or {}
+            if not page_info.get("hasNextPage"):
+                break
+            after = page_info.get("endCursor")
+            if not after:
+                break
+
+        return disks
+
+    def get_cluster_node_hardware_health(self) -> list[dict[str, Any]]:
+        nodes: list[dict[str, Any]] = []
+        after: str | None = None
+
+        while True:
+            cluster = self.graphql(
+                CLUSTER_NODE_HEALTH_QUERY,
+                {"clusterUuid": self.selected_cluster_uuid, "first": PAGE_SIZE, "after": after},
+            ).get("cluster") or {}
+            connection = cluster.get("clusterNodeConnection") or {}
+            for node in connection.get("nodes") or []:
+                nodes.append(
+                    {
+                        "id": node.get("id"),
+                        "hostname": node.get("hostname"),
+                        "policies": [
+                            {
+                                "policyName": policy.get("policyName"),
+                                "isHealthy": policy.get("isHealthy", True),
+                                "message": policy.get("message") or "",
+                            }
+                            for policy in node.get("hardwareHealth") or []
+                        ],
+                    }
+                )
+
+            page_info = connection.get("pageInfo") or {}
+            if not page_info.get("hasNextPage"):
+                break
+            after = page_info.get("endCursor")
+            if not after:
+                break
+
+        return nodes
 
 
 def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--user", help="User Name for API Calls", required=True)
-    parser.add_argument("--secret", help="Secret of User", required=True)
-    parser.add_argument("--hostname", help="Hostname to make calls to", required=True)
+    parser.add_argument("--client-id", help="RSC client ID used for token generation", required=True)
+    parser.add_argument("--client-secret", help="RSC client secret used for token generation", required=True)
     parser.add_argument(
-        "--verify_ssl",
-        help="Disable SSL certificate verification",
+        "--access-token-uri",
+        help="RSC access token URI, for example https://obi.my.rubrik.com/api/client_token",
+        required=True,
+    )
+    parser.add_argument("--cluster-name", help="Optional cluster name in RSC used to resolve the monitored cluster")
+    parser.add_argument("--cluster-uuid", help="Optional cluster UUID in RSC used to resolve the monitored cluster")
+    parser.add_argument("--hostname", help="Optional Checkmk hostname fallback used to infer the Rubrik cluster name")
+    parser.add_argument(
+        "--list-clusters",
+        help="List all clusters visible in RSC and exit",
         action="store_true",
+    )
+    parser.set_defaults(verify_ssl=True)
+    verify_ssl_group = parser.add_mutually_exclusive_group()
+    verify_ssl_group.add_argument(
+        "--verify_ssl",
+        dest="verify_ssl",
+        help="Enable SSL certificate verification (default)",
+        action="store_true",
+    )
+    verify_ssl_group.add_argument(
+        "--no-verify-ssl",
+        dest="verify_ssl",
+        help="Disable SSL certificate verification",
+        action="store_false",
     )
     parser.add_argument(
         "--sections",
         type=lambda s: s.split(","),
-        default=sections,
-        help=f"Sections to query. This is a comma separated list of {', '.join(sections)}. Default is to query all sections.",
+        default=SECTIONS,
+        help=f"Sections to query. This is a comma separated list of {', '.join(SECTIONS)}. Default is to query all sections.",
     )
     return parser.parse_args(argv)
 
 
+def _print_clusters(clusters: list[dict[str, Any]]) -> None:
+    for cluster in clusters:
+        print(cluster)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_arguments(argv)
-    api = RubrikRestApi(
-        username=args.user,
-        password=args.secret,
-        verify=args.verify_ssl,
-        hostname=args.hostname,
-    )
 
-    api.login()
+    try:
+        api = RubrikRscApi(
+            hostname=args.hostname,
+            client_id=args.client_id,
+            client_secret=args.client_secret,
+            access_token_uri=args.access_token_uri,
+            cluster_name=args.cluster_name,
+            cluster_uuid=args.cluster_uuid,
+            verify=args.verify_ssl,
+        )
+    except RubrikApiError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 1
 
-    # Cluster Data
-    # System Status
-    if "cluster_system_status" in args.sections:
-        print("<<<rubrik_cluster_system_status:sep(0)>>>")
-        print(api.get_endpoint_data("internal/cluster/me/system_status"))
+    exit_code = 0
+    try:
+        api.login()
 
-    # Compliance Summary (Snapshots)
-    if "cluster_compliance_status" in args.sections:
-        print("<<<rubrik_cluster_compliance_24_hours:sep(0)>>>")
-        print(api.get_endpoint_data("internal/report/compliance_summary_24_hours"))
+        if args.list_clusters:
+            clusters = api.list_clusters()
+            if not clusters:
+                raise RubrikApiError("No clusters are visible in RSC for this service account")
+            _print_clusters(clusters)
+            return 0
 
-    # Cluster Nodes Data
-    # Node Data
-    if "node_status" in args.sections:
-        for node in api.get_endpoint_data("internal/cluster/me/node").get("data", []):
-            print(f"<<<<{node.get('id')}>>>>")
-            print("<<<rubrik_node:sep(0)>>>")
-            print(node)
-            print("<<<<>>>>")
+        api.resolve_cluster()
 
-    # Node Disks
-    if "node_disk_status" in args.sections:
-        for disk in api.get_endpoint_data("internal/cluster/me/disk").get("data", []):
-            print(f"<<<<{disk.get('nodeId', '').split(':::')[-1]}>>>>")
-            print("<<<rubrik_node_disk:sep(0)>>>")
-            print(disk)
-            print("<<<<>>>>")
+        if "cluster_system_status" in args.sections:
+            print("<<<rubrik_cluster_system_status:sep(0)>>>")
+            print(api.get_cluster_system_status())
 
-    # Node Hardware Health
-    if "node_hardware_health" in args.sections:
-        for node, health in api.get_endpoint_data("internal/cluster/me/hardware_health").items():
-            print(f"<<<<{node}>>>>")
-            print("<<<rubrik_node_hardware_health:sep(0)>>>")
-            print(health)
-            print("<<<<>>>>")
+        if "cluster_compliance_status" in args.sections:
+            print("<<<rubrik_cluster_compliance_24_hours:sep(0)>>>")
+            print(api.get_cluster_compliance_summary())
 
-    return api.delete_token()
+        if "bandwidth" in args.sections:
+            print("<<<rubrik_bandwidth:sep(0)>>>")
+            print(api.get_cluster_bandwidth())
+
+        if "node_status" in args.sections:
+            for node in api.get_cluster_nodes_status():
+                print(f"<<<<{node.get('id')}>>>>")
+                print("<<<rubrik_node:sep(0)>>>")
+                print(node)
+                print("<<<<>>>>")
+
+        if "node_disk_status" in args.sections:
+            for disk in api.get_cluster_disk_status():
+                print(f"<<<<{str(disk.get('nodeId') or '').split(':::')[-1]}>>>>")
+                print("<<<rubrik_node_disk:sep(0)>>>")
+                print(disk)
+                print("<<<<>>>>")
+
+        if "node_hardware_health" in args.sections:
+            for node in api.get_cluster_node_hardware_health():
+                print(f"<<<<{node.get('hostname') or node.get('id')}>>>>")
+                print("<<<rubrik_node_hardware_health:sep(0)>>>")
+                print(node)
+                print("<<<<>>>>")
+    except RubrikApiError as exc:
+        sys.stderr.write(f"{exc}\n")
+        exit_code = 1
+    except Exception as exc:
+        sys.stderr.write(f"Unexpected error: {exc}\n")
+        exit_code = 1
+    finally:
+        logout_rc = api.delete_token()
+
+    return exit_code or logout_rc
 
 
 if __name__ == "__main__":
