@@ -1,0 +1,32 @@
+{
+  "defaults": {
+    "ssh_user": "root",
+    "ssh_port": 22,
+    "connect_timeout": 10,
+    "use_rsync": true,
+    "ssh_options": [
+      "ServerAliveInterval=15",
+      "ServerAliveCountMax=4",
+      "ControlMaster=auto",
+      "ControlPersist=10m",
+      "ControlPath=~/.ssh/cmk-deploy-%C"
+    ]
+  },
+  "hosts": {
+    "cmkvirt3": {
+      "ssh_host": "cmkvirt3",
+      "group": "test",
+      "sites": [
+        "mysite",
+        "testsite"
+      ]
+    },
+    "cmkvirt5": {
+      "ssh_host": "cmkvirt5",
+      "group": "production",
+      "sites": [
+        "prod"
+      ]
+    }
+  }
+}

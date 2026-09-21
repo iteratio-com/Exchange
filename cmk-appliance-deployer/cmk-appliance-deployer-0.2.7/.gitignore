@@ -1,0 +1,9 @@
+config/inventory.json
+packages/*
+!packages/.gitkeep
+logs/*
+!logs/.gitkeep
+reports/*
+!reports/.gitkeep
+state/*
+!state/.gitkeep

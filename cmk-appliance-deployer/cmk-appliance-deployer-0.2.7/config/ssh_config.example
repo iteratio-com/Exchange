@@ -1,0 +1,7 @@
+Host cmk-*
+    BatchMode yes
+    ServerAliveInterval 15
+    ServerAliveCountMax 4
+    ControlMaster auto
+    ControlPersist 10m
+    ControlPath ~/.ssh/cmk-deploy-%C

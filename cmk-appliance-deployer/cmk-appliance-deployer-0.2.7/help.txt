@@ -1,0 +1,16 @@
+usage: cmk_deploy.py [-h] [--inventory INVENTORY] [--manifest MANIFEST]
+                     [--dry-run] [--debug] [--parallel PARALLEL]
+                     {preflight,status,check-package,stage,install-cma,install-cfw,omd-update} ...
+
+SSH based Checkmk appliance deployment controller
+
+positional arguments:
+  {preflight,status,check-package,stage,install-cma,install-cfw,omd-update}
+
+options:
+  -h, --help            show this help message and exit
+  --inventory INVENTORY
+  --manifest MANIFEST   Package manifest with expected SHA256 values
+  --dry-run
+  --debug
+  --parallel PARALLEL
