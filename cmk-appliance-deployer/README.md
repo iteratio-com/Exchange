@@ -1,5 +1,7 @@
 # Checkmk Appliance Deployer
 
+**THIS IS CURRENTLY IN TESTING**
+
 ## Dokumentation
 
 **Version:** 0.2.7\
