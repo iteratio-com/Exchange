@@ -47,6 +47,17 @@ def discover_tape_drive(section: DELL_SECTION) -> DiscoveryResult:
         yield Service(item=tape_drive)
 
 
+def _to_state(value, fallback=State.UNKNOWN):
+    """Safely coerce various inputs to a State instance."""
+    if isinstance(value, State):
+        return value
+    try:
+        # State(...) accepts ints or string names in newer checkmk versions
+        return State(value)
+    except Exception:
+        return fallback
+
+
 def check_dell_emc_ml3_drive(item: str, params: Mapping[str, Any], section) -> CheckResult:
     if not (drive := section.get(item)):
         return
@@ -78,13 +89,18 @@ def check_dell_emc_ml3_drive(item: str, params: Mapping[str, Any], section) -> C
     }
     status, txt = ava_map.get(drive.ava, (State.UNKNOWN, "unknown Status Code"))
     if params.get("ava_map"):
-        status = params["ava_map"].get(f"ava_map_{drive.ava}")
-        status = State(status)
+        custom = params["ava_map"].get(f"ava_map_{drive.ava}")
+        if custom is not None:
+            status = _to_state(custom, fallback=status)
 
     yield Result(state=status, summary=f"availability State: {txt}")
 
+    # cleaning_needed: allow rules to supply State, int, or string. Default to WARN.
+    default_clean = params.get("cleaning_needed", State.WARN)
+    default_clean = _to_state(default_clean, fallback=State.WARN)
+
     cleaning_map = {
-        "1": (params.get("cleaning_needed", State.WARN), "cleaning needed"),
+        "1": (default_clean, "cleaning needed"),
         "2": (State.OK, "no cleaning needed"),
     }
     status, txt = cleaning_map.get(drive.cleaning, (State.UNKNOWN, "unknown Status"))
@@ -122,8 +138,9 @@ def check_dell_emc_ml3_drive(item: str, params: Mapping[str, Any], section) -> C
     }
     status, txt = op_status_map.get(drive.op_status, (State.UNKNOWN, "unknown status"))
     if params.get("opa_map"):
-        status = params["opa_map"].get(f"opa_map_{drive.op_status}", status)
-        status = State(status)
+        custom = params["opa_map"].get(f"opa_map_{drive.op_status}")
+        if custom is not None:
+            status = _to_state(custom, fallback=status)
     yield Result(state=status, summary=f"Operational Status: {txt}")
 
 
