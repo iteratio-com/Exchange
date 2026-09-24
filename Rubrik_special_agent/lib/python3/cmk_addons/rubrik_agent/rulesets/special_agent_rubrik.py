@@ -13,6 +13,7 @@ from cmk.rulesets.v1.form_specs import (
     Password,
     String,
     migrate_to_password,
+    Integer,
 )
 from cmk.rulesets.v1.rule_specs import SpecialAgent, Topic
 
@@ -103,6 +104,16 @@ def _formspec() -> Dictionary:
                                 help_text=Help("Cluster UUID in RSC used to resolve the monitored cluster"),
                             ),
                         ),
+                        CascadingSingleChoiceElement(
+                            name="saas",
+                            title=Title("SAAS"),
+                            parameter_form=BooleanChoice(
+                                title=Title("SAAS instead of one cluster"),
+                                label=Label("SAAS instead of one cluster"),
+                                help_text=Help("SAAS instead of one cluster for RSC API calls."),
+                                prefill=DefaultValue(False),
+                            ),
+                        ),
                     ],
                 ),
             ),
@@ -119,7 +130,7 @@ def _formspec() -> Dictionary:
                 required=False,
                 parameter_form=MultipleChoice(
                     title=Title("Sections"),
-                    help_text=Help("Select the sections to be monitored. Default is all sections."),
+                    help_text=Help("Select the sections to be monitored, default are all sections."),
                     elements=[
                         MultipleChoiceElement(
                             name="cluster_system_status",
@@ -145,7 +156,46 @@ def _formspec() -> Dictionary:
                             name="node_hardware_health",
                             title=Title("Rubrik Node Hardware Health"),
                         ),
+                        MultipleChoiceElement(
+                            name="cluster_event_logwatch",
+                            title=Title("Rubrik Cluster Events Logwatch"),
+                        ),
                     ],
+                ),
+            ),
+            "event_filter_severity": DictElement(
+                required=False,
+                parameter_form=String(
+                    title=Title("Event severity filter"),
+                    help_text=Help("Event severity filter list as string, seperator is ','. For example values, please log in to the UI section, go to the Event page, and use the browser's network analysis to determine which filters are required."),
+                ),
+            ),
+            "event_filter_last_activity_types": DictElement(
+                required=False,
+                parameter_form=String(
+                    title=Title("Event activity types filter"),
+                    help_text=Help("Event activity types filter list as string, seperator is ','.For example values, please log in to the UI section, go to the Event page, and use the browser's network analysis to determine which filters are required. "),
+                ),
+            ),
+            "event_filter_last_activity_status": DictElement(
+                required=False,
+                parameter_form=String(
+                    title=Title("Event activity status filter"),
+                    help_text=Help("Event activity status filter list as string, seperator is ','. For example values, please log in to the UI section, go to the Event page, and use the browser's network analysis to determine which filters are required."),
+                ),
+            ),
+            "event_filter_object_type": DictElement(
+                required=False,
+                parameter_form=String(
+                    title=Title("Event object type filter"),
+                    help_text=Help("Event object type filter list as string, seperator is ','. For example values, please log in to the UI section, go to the Event page, and use the browser's network analysis to determine which filters are required."),
+                ),
+            ),
+            "timeout": DictElement(
+                required=False,
+                parameter_form=Integer(
+                    title=Title("Timeout"),
+                    help_text=Help("Timeout for each request"),
                 ),
             ),
         },
