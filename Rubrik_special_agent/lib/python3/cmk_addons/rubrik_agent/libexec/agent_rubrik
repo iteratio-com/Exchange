@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import sys
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, urlunparse
@@ -23,6 +26,7 @@ SECTIONS = [
     "node_status",
     "node_disk_status",
     "node_hardware_health",
+    "cluster_event_logwatch",
 ]
 
 DEFAULT_TIMEOUT = 30
@@ -156,9 +160,79 @@ query ClusterBandwidth($clusterUuid: String!, $range: String!) {
       time
     }
   }
-}
 """
 
+CLUSTER_EVENT_QUERY = """query EventSeriesListQuery($after: String, $filters: ActivitySeriesFilter, $first: Int, $sortBy: ActivitySeriesSortField, $sortOrder: SortOrder) {
+  activitySeriesConnection(
+    after: $after
+    first: $first
+    filters: $filters
+    sortBy: $sortBy
+    sortOrder: $sortOrder
+  ) {
+    edges {
+      cursor
+      node {
+        ...EventSeriesFragment
+        cluster {
+          id
+          name
+          timezone
+          __typename
+        }
+        activityConnection(first: 1) {
+          nodes {
+            id
+            message
+            __typename
+          }
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    pageInfo {
+      endCursor
+      hasNextPage
+      hasPreviousPage
+      __typename
+    }
+    __typename
+  }
+}
+
+fragment EventSeriesFragment on ActivitySeries {
+  id
+  fid
+  activitySeriesId
+  lastUpdated
+  lastActivityType
+  lastActivityStatus
+  objectId
+  objectName
+  objectType
+  severity
+  progress
+  isCancelable
+  isPolarisEventSeries
+  location
+  effectiveThroughput
+  dataTransferred
+  logicalSize
+  slaDomainName
+  organizations {
+    id
+    name
+    __typename
+  }
+  clusterUuid
+  clusterName
+  username
+  urlMetadata
+  __typename
+}
+"""
 
 class RubrikApiError(RuntimeError):
     pass
@@ -204,9 +278,14 @@ class RubrikRscApi:
         self.session = requests.Session()
         self.session.headers.update({"accept": "application/json"})
         self.selected_cluster: dict[str, Any] | None = None
+        self.timeout = DEFAULT_TIMEOUT
 
         if not self.verify:
             urllib3.disable_warnings(InsecureRequestWarning)
+    
+    def overwrite_cluster(self, cluster_name: str, cluster_uuid: str) -> None:
+        self.cluster_name = cluster_name
+        self.cluster_uuid = cluster_uuid
 
     @staticmethod
     def _derive_rsc_base_url(access_token_uri: str) -> str:
@@ -230,7 +309,7 @@ class RubrikRscApi:
                     "content-type": "application/json",
                 },
                 verify=self.verify,
-                timeout=DEFAULT_TIMEOUT,
+                timeout=self.timeout,
             )
             response.raise_for_status()
         except requests.RequestException as exc:
@@ -283,7 +362,7 @@ class RubrikRscApi:
                     "content-type": "application/json",
                 },
                 verify=self.verify,
-                timeout=DEFAULT_TIMEOUT,
+                timeout=self.timeout,
             )
             response.raise_for_status()
         except requests.RequestException as exc:
@@ -496,6 +575,114 @@ class RubrikRscApi:
 
         return nodes
 
+    def save_last_check(self, timestamp: str, object):
+        archiv = f"{os.environ['OMD_ROOT']}/var/check_mk/rubrik/{self.hostname}/"
+        Path(archiv).mkdir(parents=True, exist_ok=True)
+        try:
+            with open(archiv + "last_time.txt", "w", encoding="utf-8") as f:
+                if timestamp:
+                    f.write(timestamp)
+            with open(archiv + "last_checked.txt", "w", encoding="utf-8") as f:
+                if object:
+                    json.dump(object, f, ensure_ascii=False)
+        except Exception:
+            pass
+    
+    def get_last_check(self) -> str:
+        archiv = f"{os.environ['OMD_ROOT']}/var/check_mk/rubrik/{self.hostname}/"
+        Path(archiv).mkdir(parents=True, exist_ok=True)
+        data_obj = {}
+        try:
+            with open(archiv + "last_checked.txt", "r", encoding="utf-8") as f:
+                try:
+                    data_obj = json.load(f)
+                except Exception:
+                    pass
+            with open(archiv + "last_time.txt", "r", encoding="utf-8") as f:
+                date_str = f.readline()
+                date_obj = datetime.strptime(date_str.split("T")[0], "%Y-%m-%d").date()
+
+                if date_obj == date.today() or date_obj == date.today() - timedelta(days=1):
+                    return (data_obj, date_str)
+                else:
+                    return (data_obj, (date.today() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
+        except Exception:
+            return ({}, (date.today() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
+    
+    def get_cluster_events(self, last_activity_types: list | None, severity: list | None, lastactivitystatus: list | None, objecttype: list | None) -> list[dict[str, Any]]:
+        events: list[dict[str, Any]] = []
+        after: str | None = None
+        
+        filters = {}
+        last_data, last_updated = self.get_last_check()
+        last_entry = {}
+        newest_timestamp = datetime.strptime(last_updated, "%Y-%m-%dT%H:%M:%S.%fZ")
+
+        if self.selected_cluster_uuid:
+            filters["clusterId"] = self.selected_cluster_uuid
+        if last_activity_types:
+            filters["lastActivityType"] = last_activity_types
+        if lastactivitystatus:
+            filters["lastActivityStatus"] = lastactivitystatus
+        if objecttype:
+            filters["objectType"] = objecttype
+        if severity:
+            filters["severity"] = severity
+        if last_updated:
+            filters["lastUpdatedTimeGt"] = last_updated
+
+
+        while True:
+            result = self.graphql(
+                CLUSTER_EVENT_QUERY,
+                {
+                    "filters": filters,
+                    "first": PAGE_SIZE,
+                    "after": after,
+                },
+            )
+            connection = result.get("activitySeriesConnection") or {}
+            for node in connection.get("edges") or []:
+                entry = node.get("node")
+                events.append(
+                    {
+                        "id": entry.get("activitySeriesId"),
+                        "last_updated": entry.get("lastUpdated"),
+                        "type": entry.get("lastActivityType"),
+                        "status": entry.get("lastActivityStatus"),
+                        "object_name": entry.get("objectName"),
+                        "severity": entry.get("severity"),
+                        "object_type": entry.get("objectType"),
+                        "message": entry.get("activityConnection"),
+                    }
+                )
+                if entry.get("lastUpdated"):
+                    lastUpdated = datetime.strptime(entry.get("lastUpdated"), "%Y-%m-%dT%H:%M:%S.%fZ")
+                    if newest_timestamp >= lastUpdated:
+                        pass
+                    else:
+                        newest_timestamp = lastUpdated
+                        last_entry = {
+                        "id": entry.get("activitySeriesId"),
+                        "last_updated": entry.get("lastUpdated"),
+                        "type": entry.get("lastActivityType"),
+                        "status": entry.get("lastActivityStatus"),
+                        "object_name": entry.get("objectName"),
+                        "severity": entry.get("severity"),
+                        "object_type": entry.get("objectType"),
+                        "message": entry.get("activityConnection"),
+                    }
+            page_info = connection.get("pageInfo") or {}
+            if not page_info.get("hasNextPage"):
+                break
+            after = page_info.get("endCursor")
+            if not after:
+                break
+        if newest_timestamp != datetime.strptime(last_updated, "%Y-%m-%dT%H:%M:%S.%fZ"):
+            self.save_last_check(newest_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z", last_entry)
+        if len(events) == 1 and events[0] == last_data:
+            return []
+        return events
 
 def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -509,6 +696,36 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--cluster-name", help="Optional cluster name in RSC used to resolve the monitored cluster")
     parser.add_argument("--cluster-uuid", help="Optional cluster UUID in RSC used to resolve the monitored cluster")
     parser.add_argument("--hostname", help="Optional Checkmk hostname fallback used to infer the Rubrik cluster name")
+    parser.add_argument(
+        "--saas",
+        help="If SaaS use all clusters as piggyback",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--event-lastactivitytype",
+        type=lambda s: s.split(","),
+        help="Event filter to query. This is a comma separated list.",
+    )
+    parser.add_argument(
+        "--event-severity",
+        type=lambda s: s.split(","),
+        help="Event filter to query. This is a comma separated list.",
+    )
+    parser.add_argument(
+        "--event-lastactivitystatus",
+        type=lambda s: s.split(","),
+        help="Event filter to query. This is a comma separated list.",
+    )
+    parser.add_argument(
+        "--event-objecttype",
+        type=lambda s: s.split(","),
+        help="Event filter to query. This is a comma separated list.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        help="Timeout value for each query",
+    )
     parser.add_argument(
         "--list-clusters",
         help="List all clusters visible in RSC and exit",
@@ -541,6 +758,55 @@ def _print_clusters(clusters: list[dict[str, Any]]) -> None:
     for cluster in clusters:
         print(cluster)
 
+def resolve_sections(args: argparse.Namespace, api: RubrikRscApi) -> None:
+    if "cluster_system_status" in args.sections:
+        print("<<<rubrik_cluster_system_status:sep(0)>>>")
+        print(api.get_cluster_system_status())
+
+    if "cluster_compliance_status" in args.sections:
+        print("<<<rubrik_cluster_compliance_24_hours:sep(0)>>>")
+        print(api.get_cluster_compliance_summary())
+    
+    if "bandwidth" in args.sections:
+        print("<<<rubrik_bandwidth:sep(0)>>>")
+        print(api.get_cluster_bandwidth())
+
+    if "node_status" in args.sections:
+        for node in api.get_cluster_nodes_status():
+            print(f"<<<<{node.get('id')}>>>>")
+            print("<<<rubrik_node:sep(0)>>>")
+            print(node)
+            print("<<<<>>>>")
+
+    if "node_disk_status" in args.sections:
+        for disk in api.get_cluster_disk_status():
+            print(f"<<<<{str(disk.get('nodeId') or '').split(':::')[-1]}>>>>")
+            print("<<<rubrik_node_disk:sep(0)>>>")
+            print(disk)
+            print("<<<<>>>>")
+
+    if "node_hardware_health" in args.sections:
+        for node in api.get_cluster_node_hardware_health():
+            print(f"<<<<{node.get('hostname') or node.get('id')}>>>>")
+            print("<<<rubrik_node_hardware_health:sep(0)>>>")
+            print(node)
+            print("<<<<>>>>")
+
+def resolve_cluster_section(args: argparse.Namespace, api: RubrikRscApi) -> None:
+    if "cluster_event_logwatch" in args.sections:
+        status_map = {
+            "info": "O",
+            "warning": "W",
+            "critical": "C",
+            "fallback": "u",
+        }
+        print("<<<logwatch>>>")
+        print(f"[[[Rubrik Events - {api.cluster_name}]]]")
+        for data in api.get_cluster_events(args.event_lastactivitytype, args.event_severity, args.event_lastactivitystatus, args.event_objecttype):
+            if len(data) != 0:
+                for message in data.get('message').get('nodes'):
+                    print(f"{status_map.get(data.get('severity').lower(), status_map.get('fallback'))} {message.get('message')} ")
+        print("<<<<>>>>")
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_arguments(argv)
@@ -562,6 +828,8 @@ def main(argv: list[str] | None = None) -> int:
     exit_code = 0
     try:
         api.login()
+        if args.timeout:
+            api.timeout = args.timeout
 
         if args.list_clusters:
             clusters = api.list_clusters()
@@ -570,40 +838,20 @@ def main(argv: list[str] | None = None) -> int:
             _print_clusters(clusters)
             return 0
 
-        api.resolve_cluster()
-
-        if "cluster_system_status" in args.sections:
-            print("<<<rubrik_cluster_system_status:sep(0)>>>")
-            print(api.get_cluster_system_status())
-
-        if "cluster_compliance_status" in args.sections:
-            print("<<<rubrik_cluster_compliance_24_hours:sep(0)>>>")
-            print(api.get_cluster_compliance_summary())
-
-        if "bandwidth" in args.sections:
-            print("<<<rubrik_bandwidth:sep(0)>>>")
-            print(api.get_cluster_bandwidth())
-
-        if "node_status" in args.sections:
-            for node in api.get_cluster_nodes_status():
-                print(f"<<<<{node.get('id')}>>>>")
-                print("<<<rubrik_node:sep(0)>>>")
-                print(node)
+        if args.saas:
+            clusters = api.list_clusters()
+            for cluster in clusters:
+                api.overwrite_cluster(cluster.get("name"), cluster.get("id"))
+                api.resolve_cluster()
+                print(f"<<<<{api.cluster_name}>>>>")
+                resolve_sections(args, api)
                 print("<<<<>>>>")
+                resolve_cluster_section(args, api)
+        else:
+            api.resolve_cluster()
+            resolve_sections(args, api)
+            resolve_cluster_section(args, api)
 
-        if "node_disk_status" in args.sections:
-            for disk in api.get_cluster_disk_status():
-                print(f"<<<<{str(disk.get('nodeId') or '').split(':::')[-1]}>>>>")
-                print("<<<rubrik_node_disk:sep(0)>>>")
-                print(disk)
-                print("<<<<>>>>")
-
-        if "node_hardware_health" in args.sections:
-            for node in api.get_cluster_node_hardware_health():
-                print(f"<<<<{node.get('hostname') or node.get('id')}>>>>")
-                print("<<<rubrik_node_hardware_health:sep(0)>>>")
-                print(node)
-                print("<<<<>>>>")
     except RubrikApiError as exc:
         sys.stderr.write(f"{exc}\n")
         exit_code = 1
