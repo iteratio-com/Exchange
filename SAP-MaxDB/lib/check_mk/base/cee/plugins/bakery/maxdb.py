@@ -38,14 +38,23 @@ def _get_maxdb_conf_lines(conf: dict[str, str]) -> list[str]:
             i.replace("backup", "backup:sep(124)").replace("data", "data:sep(61)")
             for i in item.get("modules", [])
         ]
-        db = [
-            f"[{item.get('dbname')}]",
-            f"user={item.get('user')}",
-            f"password={item.get('password')}",
+        db = [f"[{item.get('dbname')}]"]
+        # Authentication: an XUSER key avoids storing plaintext credentials in
+        # maxdb.cfg. If configured, it takes precedence over user/password.
+        # The WATO rule nests the credentials under "auth"; older rule versions
+        # stored user/password directly on the item, so support both layouts.
+        auth = item.get("auth", item)
+        xuser_key = auth.get("xuser_key")
+        if xuser_key:
+            db.append(f"xuser_key={xuser_key}")
+        else:
+            db.append(f"user={auth.get('user')}")
+            db.append(f"password={auth.get('password')}")
+        db.extend([
             "cmd_tool=" + item.get("cmd_tool", f"/sapdb/{item.get('dbname')}/db/bin/dbmcli"),
             f"timeout={item.get('timeout', 20)}",
             f"modules={str(modules)}",
-        ]
+        ])
         out.extend(db)
     return out
 

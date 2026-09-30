@@ -12,6 +12,7 @@ from cmk.gui.valuespec import (
     Integer,
     Password,
     ListOf,
+    Alternative,
 )
 
 from cmk.gui.i18n import _
@@ -37,18 +38,66 @@ def _valuespec_agent_config_maxdb():
                                 TextInput(title=_("Name of Database"), help=_("MaxDB Name")),
                             ),
                             (
-                                "user",
-                                TextInput(
-                                    title=_("Username"), help=_("User for Login into the MaxDB")
-                                ),
-                            ),
-                            (
-                                "password",
-                                Password(
-                                    title=_("Password of User"),
+                                "auth",
+                                Alternative(
+                                    title=_("Authentication"),
                                     help=_(
-                                        "Password for the user. Be careful the password is in clear text in the agent configuration."
+                                        "Choose how the plugin authenticates against the MaxDB. "
+                                        "Using an XUSER key (dbmcli -U &lt;key&gt;) is recommended, "
+                                        "as it avoids storing the password in clear text in the "
+                                        "agent configuration file maxdb.cfg. The XUSER key must be "
+                                        "created beforehand with <tt>xuser set</tt> for the OS user "
+                                        "that runs the Checkmk agent."
                                     ),
+                                    elements=[
+                                        Dictionary(
+                                            title=_("XUSER key (no plaintext password)"),
+                                            elements=[
+                                                (
+                                                    "xuser_key",
+                                                    TextInput(
+                                                        title=_("XUSER key"),
+                                                        regex="^[A-Za-z0-9_.-]+$",
+                                                        regex_error=_(
+                                                            "Only letters, digits and _.- are allowed."
+                                                        ),
+                                                        help=_(
+                                                            "Name of the XUSER entry to use with "
+                                                            "dbmcli -U. Create it with e.g. "
+                                                            "<tt>xuser set -U MONCSP -d CSP -u "
+                                                            "MONITOR,secret</tt> as the agent's OS user."
+                                                        ),
+                                                        allow_empty=False,
+                                                    ),
+                                                ),
+                                            ],
+                                            optional_keys=[],
+                                        ),
+                                        Dictionary(
+                                            title=_("User and password (clear text in maxdb.cfg)"),
+                                            elements=[
+                                                (
+                                                    "user",
+                                                    TextInput(
+                                                        title=_("Username"),
+                                                        help=_("User for Login into the MaxDB"),
+                                                    ),
+                                                ),
+                                                (
+                                                    "password",
+                                                    Password(
+                                                        title=_("Password of User"),
+                                                        help=_(
+                                                            "Password for the user. Be careful the "
+                                                            "password is in clear text in the agent "
+                                                            "configuration."
+                                                        ),
+                                                    ),
+                                                ),
+                                            ],
+                                            optional_keys=[],
+                                        ),
+                                    ],
                                 ),
                             ),
                             (
