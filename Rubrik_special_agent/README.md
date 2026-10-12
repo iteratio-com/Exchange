@@ -1,5 +1,9 @@
 # Rubrik REST API Special Agent
 
+## Download
+
+Current version: **1.5.6** — [rubrik_agent-1.5.6.mkp](rubrik_agent-1.5.6.mkp) ([SHA-256 checksum](rubrik_agent-1.5.6.mkp.sha256)).
+
 ## Function
 
 **IMPORTANT: Migration to RSC**
@@ -40,6 +44,12 @@ Filter values can be identified by inspecting requests from the Rubrik SaaS Even
 
 The configurable Storage section reports the estimated remaining capacity in days. Missing runway values result in **UNKNOWN** rather than being interpreted as zero days.
 
+### Node Hardware Health
+
+The **Rubrik Node Hardware Health** ruleset provides exceptions for selected hardware health policies. An unhealthy policy can be ignored or mapped to **OK**, **WARN**, or **CRIT**. Healthy policies remain **OK**; unconfigured unhealthy policies remain **CRIT**.
+
+The worst evaluated state determines the service state. Original findings remain visible in the service details, including ignored or mapped policies. If all returned policies are ignored, the service reports **OK** with an explicit summary. If no policies are returned, the service reports **UNKNOWN**.
+
 ### Connection settings
 
 The request timeout is configurable. SSL certificate verification is enabled by default and can be explicitly disabled in the special agent rule.
@@ -51,7 +61,7 @@ The request timeout is configurable. SSL certificate verification is enabled by 
 
 ## Checkmk version compatibility
 
-Current development targets **Checkmk 2.5.0**.
+**Compatibility:** Checkmk 2.3–2.5. Successfully tested with Checkmk 2.5.0.
 
 Earlier packages:
 
@@ -109,3 +119,4 @@ Thanks to **Sebastian Häger** ([Sebastian.Haeger@sva.de](mailto:Sebastian.Haege
 * 1.5.3 Added Event Logwatch with filters, configurable request timeout, and SaaS-wide cluster monitoring with cluster piggyback hosts, contributed by Sebastian Häger (Sebastian.Haeger@sva.de)
 * 1.5.4 Code optimization and bug fixes
 * 1.5.5 Fixed bandwidth query, restored Storage section selection with UNKNOWN handling for missing runway data, and hardened event handling with required filters and temporary state storage.
+* 1.5.6 Added selectable hardware health policy exceptions (Ignore/OK/WARN/CRIT), preserved monitoring of other components, and clarified Event Logwatch filter requirements.

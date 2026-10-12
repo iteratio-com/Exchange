@@ -15,8 +15,8 @@ import cmk.utils.password_store
 import requests
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
+from cmk.utils.paths import tmp_dir
 
-cmk.utils.password_store.replace_passwords()
 urllib3.disable_warnings(InsecureRequestWarning)
 
 SECTIONS = [
@@ -26,11 +26,9 @@ SECTIONS = [
     "node_status",
     "node_disk_status",
     "node_hardware_health",
+    "storage",
     "cluster_event_logwatch",
 ]
-
-DEFAULT_TIMEOUT = 30
-PAGE_SIZE = 200
 
 LIST_CLUSTERS_QUERY = """
 query ListClusters($first: Int!, $after: String, $filter: ClusterFilterInput) {
@@ -44,6 +42,7 @@ query ListClusters($first: Int!, $after: String, $filter: ClusterFilterInput) {
       status
       systemStatus
       isHealthy
+      estimatedRunway
     }
     pageInfo {
       hasNextPage
@@ -160,6 +159,7 @@ query ClusterBandwidth($clusterUuid: String!, $range: String!) {
       time
     }
   }
+}
 """
 
 CLUSTER_EVENT_QUERY = """query EventSeriesListQuery($after: String, $filters: ActivitySeriesFilter, $first: Int, $sortBy: ActivitySeriesSortField, $sortOrder: SortOrder) {
@@ -264,6 +264,8 @@ class RubrikRscApi:
         cluster_name: str | None = None,
         cluster_uuid: str | None = None,
         verify: bool = False,
+        timeout: int = 30,
+        page_size: int = 200,
     ) -> None:
         self.hostname = hostname
         self.cluster_name = cluster_name
@@ -276,9 +278,15 @@ class RubrikRscApi:
         self.client_secret = _resolve_secret_reference(client_secret)
         self.token: str | None = None
         self.session = requests.Session()
-        self.session.headers.update({"accept": "application/json"})
+        self.session.headers.update({"accept": "application/json", "User-Agent": "CheckmkRubrikAgent/1.5.6"})
         self.selected_cluster: dict[str, Any] | None = None
-        self.timeout = DEFAULT_TIMEOUT
+        self.timeout = timeout
+        self.page_size = page_size
+
+        archiv = tmp_dir / "agents/agent_rubrik/{self.hostname}/"
+        archiv.mkdir(parents=True, exist_ok=True)
+        self.last_checked_file = archiv / "last_checked.txt"
+        self.last_time_file = archiv / "last_time.txt"
 
         if not self.verify:
             urllib3.disable_warnings(InsecureRequestWarning)
@@ -336,7 +344,7 @@ class RubrikRscApi:
             response = self.session.delete(
                 url=f"{self.rsc_base_url}/api/session",
                 verify=self.verify,
-                timeout=DEFAULT_TIMEOUT,
+                timeout=self.timeout,
             )
             if response.status_code not in (200, 204):
                 sys.stderr.write(
@@ -383,7 +391,7 @@ class RubrikRscApi:
         after: str | None = None
 
         while True:
-            variables: dict[str, Any] = {"first": PAGE_SIZE, "after": after}
+            variables: dict[str, Any] = {"first": self.page_size, "after": after}
             if filter_input:
                 variables["filter"] = filter_input
 
@@ -453,7 +461,7 @@ class RubrikRscApi:
         while True:
             payload = self.graphql(
                 CLUSTER_COMPLIANCE_QUERY,
-                {"clusterUuid": self.selected_cluster_uuid, "first": PAGE_SIZE, "after": after},
+                {"clusterUuid": self.selected_cluster_uuid, "first": self.page_size, "after": after},
             ).get("snappableConnection") or {}
 
             total_protected = payload.get("count", total_protected)
@@ -501,6 +509,16 @@ class RubrikRscApi:
         average = int(sum(values) / len(values)) if values else 0
         return {"archiveAvgBytesPerSecondLastHour": average}
 
+    def get_cluster_storage(self) -> dict[str, Any]:
+        cluster = self.selected_cluster
+        if cluster is None:
+            raise RubrikApiError("No Rubrik cluster has been resolved yet")
+
+        runway = cluster.get("estimatedRunway")
+        return {
+            "runwayRemaining": int(runway) if runway is not None else None,
+        }
+
     def get_cluster_nodes_status(self) -> list[dict[str, Any]]:
         data = self.graphql(CLUSTER_NODES_STATUS_QUERY, {"clusterUuid": self.selected_cluster_uuid}).get("clusterNodes") or {}
         return list(data.get("data") or [])
@@ -512,7 +530,7 @@ class RubrikRscApi:
         while True:
             cluster = self.graphql(
                 CLUSTER_DISKS_QUERY,
-                {"clusterUuid": self.selected_cluster_uuid, "first": PAGE_SIZE, "after": after},
+                {"clusterUuid": self.selected_cluster_uuid, "first": self.page_size, "after": after},
             ).get("cluster") or {}
             connection = cluster.get("clusterDiskConnection") or {}
             for disk in connection.get("nodes") or []:
@@ -547,7 +565,7 @@ class RubrikRscApi:
         while True:
             cluster = self.graphql(
                 CLUSTER_NODE_HEALTH_QUERY,
-                {"clusterUuid": self.selected_cluster_uuid, "first": PAGE_SIZE, "after": after},
+                {"clusterUuid": self.selected_cluster_uuid, "first": self.page_size, "after": after},
             ).get("cluster") or {}
             connection = cluster.get("clusterNodeConnection") or {}
             for node in connection.get("nodes") or []:
@@ -576,29 +594,24 @@ class RubrikRscApi:
         return nodes
 
     def save_last_check(self, timestamp: str, object):
-        archiv = f"{os.environ['OMD_ROOT']}/var/check_mk/rubrik/{self.hostname}/"
-        Path(archiv).mkdir(parents=True, exist_ok=True)
         try:
-            with open(archiv + "last_time.txt", "w", encoding="utf-8") as f:
-                if timestamp:
-                    f.write(timestamp)
-            with open(archiv + "last_checked.txt", "w", encoding="utf-8") as f:
-                if object:
-                    json.dump(object, f, ensure_ascii=False)
+            with open(self.last_time_file, "w", encoding="utf-8") as f:
+                f.write(timestamp)
+            with open(self.last_checked_file, "w", encoding="utf-8") as f:
+                json.dump(object, f, ensure_ascii=False)
         except Exception:
             pass
     
-    def get_last_check(self) -> str:
-        archiv = f"{os.environ['OMD_ROOT']}/var/check_mk/rubrik/{self.hostname}/"
-        Path(archiv).mkdir(parents=True, exist_ok=True)
+    def get_last_check(self) -> tuple[Any, str]:
+
         data_obj = {}
         try:
-            with open(archiv + "last_checked.txt", "r", encoding="utf-8") as f:
+            with open(self.last_checked_file, "r", encoding="utf-8") as f:
                 try:
                     data_obj = json.load(f)
                 except Exception:
                     pass
-            with open(archiv + "last_time.txt", "r", encoding="utf-8") as f:
+            with open(self.last_time_file, "r", encoding="utf-8") as f:
                 date_str = f.readline()
                 date_obj = datetime.strptime(date_str.split("T")[0], "%Y-%m-%d").date()
 
@@ -637,7 +650,7 @@ class RubrikRscApi:
                 CLUSTER_EVENT_QUERY,
                 {
                     "filters": filters,
-                    "first": PAGE_SIZE,
+                    "first": self.page_size,
                     "after": after,
                 },
             )
@@ -690,12 +703,18 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--client-secret", help="RSC client secret used for token generation", required=True)
     parser.add_argument(
         "--access-token-uri",
-        help="RSC access token URI, for example https://obi.my.rubrik.com/api/client_token",
+        help="RSC access token URI, for example https://example.my.rubrik.com/api/client_token",
         required=True,
     )
     parser.add_argument("--cluster-name", help="Optional cluster name in RSC used to resolve the monitored cluster")
     parser.add_argument("--cluster-uuid", help="Optional cluster UUID in RSC used to resolve the monitored cluster")
     parser.add_argument("--hostname", help="Optional Checkmk hostname fallback used to infer the Rubrik cluster name")
+    parser.add_argument(
+        "--page-size",
+        type=int,
+        default=200,
+        help="Number of items to fetch per page for paginated queries (default: %(default)s)",
+    )
     parser.add_argument(
         "--saas",
         help="If SaaS use all clusters as piggyback",
@@ -723,8 +742,9 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--timeout",
+        default=30,
         type=int,
-        help="Timeout value for each query",
+        help="Timeout value for each query (default: %(default)s)",
     )
     parser.add_argument(
         "--list-clusters",
@@ -771,6 +791,10 @@ def resolve_sections(args: argparse.Namespace, api: RubrikRscApi) -> None:
         print("<<<rubrik_bandwidth:sep(0)>>>")
         print(api.get_cluster_bandwidth())
 
+    if "storage" in args.sections:
+        print("<<<rubrik_storage:sep(0)>>>")
+        print(api.get_cluster_storage())
+
     if "node_status" in args.sections:
         for node in api.get_cluster_nodes_status():
             print(f"<<<<{node.get('id')}>>>>")
@@ -804,12 +828,15 @@ def resolve_cluster_section(args: argparse.Namespace, api: RubrikRscApi) -> None
         print(f"[[[Rubrik Events - {api.cluster_name}]]]")
         for data in api.get_cluster_events(args.event_lastactivitytype, args.event_severity, args.event_lastactivitystatus, args.event_objecttype):
             if len(data) != 0:
-                for message in data.get('message').get('nodes'):
-                    print(f"{status_map.get(data.get('severity').lower(), status_map.get('fallback'))} {message.get('message')} ")
+                for message in data.get('message', {}).get('nodes', {}):
+                    print(f"{status_map.get(data.get('severity', '').lower(), status_map.get('fallback'))} {message.get('message')} ")
         print("<<<<>>>>")
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_arguments(argv)
+
+    if not args.event_lastactivitytype and not args.event_severity and not args.event_lastactivitystatus and not args.event_objecttype and "cluster_event_logwatch" in args.sections:
+        args.sections.remove("cluster_event_logwatch")
 
     try:
         api = RubrikRscApi(
@@ -820,6 +847,8 @@ def main(argv: list[str] | None = None) -> int:
             cluster_name=args.cluster_name,
             cluster_uuid=args.cluster_uuid,
             verify=args.verify_ssl,
+            timeout=args.timeout,
+            page_size=args.page_size,
         )
     except RubrikApiError as exc:
         sys.stderr.write(f"{exc}\n")
@@ -828,8 +857,6 @@ def main(argv: list[str] | None = None) -> int:
     exit_code = 0
     try:
         api.login()
-        if args.timeout:
-            api.timeout = args.timeout
 
         if args.list_clusters:
             clusters = api.list_clusters()
@@ -841,7 +868,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.saas:
             clusters = api.list_clusters()
             for cluster in clusters:
-                api.overwrite_cluster(cluster.get("name"), cluster.get("id"))
+                api.overwrite_cluster(cluster.get('name', ''), cluster.get('id', ''))
                 api.resolve_cluster()
                 print(f"<<<<{api.cluster_name}>>>>")
                 resolve_sections(args, api)

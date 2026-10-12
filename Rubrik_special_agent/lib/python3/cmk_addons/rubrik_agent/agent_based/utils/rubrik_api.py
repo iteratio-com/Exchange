@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
 
 from ast import literal_eval
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 from cmk.agent_based.v2 import StringTable
 
-RubrikSection = dict[str, Any]
-RubrikSectionDisk = list[RubrikSection]
+RubrikSection = Dict[str, Any]
+RubrikSectionDisk = List[RubrikSection]
 
 
 def parse_rubrik_single(string_table: StringTable) -> Optional[RubrikSection]:

@@ -77,7 +77,7 @@ def _formspec() -> Dictionary:
                 parameter_form=String(
                     title=Title("RSC Access Token URI"),
                     help_text=Help(
-                        "Token endpoint of the Rubrik Security Cloud tenant, for example https://obi.my.rubrik.com/api/client_token"
+                        "Token endpoint of the Rubrik Security Cloud tenant, for example https://example.my.rubrik.com/api/client_token"
                     ),
                 ),
             ),
@@ -130,7 +130,7 @@ def _formspec() -> Dictionary:
                 required=False,
                 parameter_form=MultipleChoice(
                     title=Title("Sections"),
-                    help_text=Help("Select the sections to be monitored, default are all sections."),
+                    help_text=Help("Select the sections to be monitored, default are all sections.<br><b>If no event filters are set, the cluster_event_logwatch section will be ignored.</b>"),
                     elements=[
                         MultipleChoiceElement(
                             name="cluster_system_status",
@@ -145,6 +145,14 @@ def _formspec() -> Dictionary:
                             title=Title("Rubrik Cluster Bandwidth"),
                         ),
                         MultipleChoiceElement(
+                            name="storage",
+                            title=Title("Rubrik Cluster Storage"),
+                        ),
+                        MultipleChoiceElement(
+                            name="cluster_event_logwatch",
+                            title=Title("Rubrik Cluster Events Logwatch"),
+                        ),
+                        MultipleChoiceElement(
                             name="node_status",
                             title=Title("Rubrik Node Status"),
                         ),
@@ -156,10 +164,6 @@ def _formspec() -> Dictionary:
                             name="node_hardware_health",
                             title=Title("Rubrik Node Hardware Health"),
                         ),
-                        MultipleChoiceElement(
-                            name="cluster_event_logwatch",
-                            title=Title("Rubrik Cluster Events Logwatch"),
-                        ),
                     ],
                 ),
             ),
@@ -167,28 +171,28 @@ def _formspec() -> Dictionary:
                 required=False,
                 parameter_form=String(
                     title=Title("Event severity filter"),
-                    help_text=Help("Event severity filter list as string, seperator is ','. For example values, please log in to the UI section, go to the Event page, and use the browser's network analysis to determine which filters are required."),
+                    help_text=Help("Event severity filter list as string, seperator is ','. For example values, please log in to the Rubrik UI section, go to the Event page, and use the browser's network analysis to determine which filters are required."),
                 ),
             ),
             "event_filter_last_activity_types": DictElement(
                 required=False,
                 parameter_form=String(
                     title=Title("Event activity types filter"),
-                    help_text=Help("Event activity types filter list as string, seperator is ','.For example values, please log in to the UI section, go to the Event page, and use the browser's network analysis to determine which filters are required. "),
+                    help_text=Help("Event activity types filter list as string, seperator is ','.For example values, please log in to the Rubrik UI section, go to the Event page, and use the browser's network analysis to determine which filters are required. "),
                 ),
             ),
             "event_filter_last_activity_status": DictElement(
                 required=False,
                 parameter_form=String(
                     title=Title("Event activity status filter"),
-                    help_text=Help("Event activity status filter list as string, seperator is ','. For example values, please log in to the UI section, go to the Event page, and use the browser's network analysis to determine which filters are required."),
+                    help_text=Help("Event activity status filter list as string, seperator is ','. For example values, please log in to the Rubrik UI section, go to the Event page, and use the browser's network analysis to determine which filters are required."),
                 ),
             ),
             "event_filter_object_type": DictElement(
                 required=False,
                 parameter_form=String(
                     title=Title("Event object type filter"),
-                    help_text=Help("Event object type filter list as string, seperator is ','. For example values, please log in to the UI section, go to the Event page, and use the browser's network analysis to determine which filters are required."),
+                    help_text=Help("Event object type filter list as string, seperator is ','. For example values, please log in to the Rubrik UI section, go to the Event page, and use the browser's network analysis to determine which filters are required."),
                 ),
             ),
             "timeout": DictElement(
