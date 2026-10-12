@@ -2,7 +2,7 @@
 
 ## Download
 
-Current version: **1.5.6** — [rubrik_agent-1.5.6.mkp](rubrik_agent-1.5.6.mkp) ([SHA-256 checksum](rubrik_agent-1.5.6.mkp.sha256)).
+Current version: **1.5.7** — [rubrik_agent-1.5.7.mkp](rubrik_agent-1.5.7.mkp).
 
 ## Function
 
@@ -28,6 +28,8 @@ Node data is provided via piggyback. In SaaS mode, cluster hosts are also provid
 ### Event Logwatch
 
 Event Logwatch is reported on the querying host rather than via piggyback.
+
+Event state is stored separately for each querying host and cluster UUID, including when switching clusters in SaaS mode.
 
 At least one of the following event filters must be configured:
 
@@ -68,7 +70,7 @@ Earlier packages:
 * Checkmk 2.1.0: `rubrik_agent-0.9.3.mkp` (deprecated)
 * Checkmk 2.2.0: `rubrik_agent-1.2.3.mkp`
 * Checkmk 2.3.0 and 2.4.0 with instance-based CDM: `rubrik_agent-1.4.3.mkp`
-* Checkmk 2.3.0 and 2.4.0 with cloud-based RSC: `rubrik_agent-1.5.2.mkp`
+* Checkmk 2.3.0 and 2.4.0 with cloud-based RSC: `rubrik_agent-1.5.7.mkp`
 
 ## Thanks!
 
@@ -120,3 +122,4 @@ Thanks to **Sebastian Häger** ([Sebastian.Haeger@sva.de](mailto:Sebastian.Haege
 * 1.5.4 Code optimization and bug fixes
 * 1.5.5 Fixed bandwidth query, restored Storage section selection with UNKNOWN handling for missing runway data, and hardened event handling with required filters and temporary state storage.
 * 1.5.6 Added selectable hardware health policy exceptions (Ignore/OK/WARN/CRIT), preserved monitoring of other components, and clarified Event Logwatch filter requirements.
+* 1.5.7 Fixed Event Logwatch state isolation by querying host and cluster UUID, including SaaS cluster switching.

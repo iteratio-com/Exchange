@@ -9,7 +9,7 @@ import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import quote, urlparse, urlunparse
 
 import cmk.utils.password_store
 import requests
@@ -278,15 +278,10 @@ class RubrikRscApi:
         self.client_secret = _resolve_secret_reference(client_secret)
         self.token: str | None = None
         self.session = requests.Session()
-        self.session.headers.update({"accept": "application/json", "User-Agent": "CheckmkRubrikAgent/1.5.6"})
+        self.session.headers.update({"accept": "application/json", "User-Agent": "CheckmkRubrikAgent/1.5.7"})
         self.selected_cluster: dict[str, Any] | None = None
         self.timeout = timeout
         self.page_size = page_size
-
-        archiv = tmp_dir / "agents/agent_rubrik/{self.hostname}/"
-        archiv.mkdir(parents=True, exist_ok=True)
-        self.last_checked_file = archiv / "last_checked.txt"
-        self.last_time_file = archiv / "last_time.txt"
 
         if not self.verify:
             urllib3.disable_warnings(InsecureRequestWarning)
@@ -294,6 +289,23 @@ class RubrikRscApi:
     def overwrite_cluster(self, cluster_name: str, cluster_uuid: str) -> None:
         self.cluster_name = cluster_name
         self.cluster_uuid = cluster_uuid
+
+    @property
+    def _event_state_directory(self) -> Path:
+        """Separate event state by querying host and currently resolved cluster."""
+        host = quote(self.hostname or "standalone", safe="")
+        cluster = quote(self.selected_cluster_uuid, safe="")
+        return tmp_dir / "agents" / "agent_rubrik" / f"host-{host}" / f"cluster-{cluster}"
+
+    @property
+    def last_checked_file(self) -> Path:
+        """Return the event record path for the currently resolved cluster."""
+        return self._event_state_directory / "last_checked.txt"
+
+    @property
+    def last_time_file(self) -> Path:
+        """Return the timestamp path for the currently resolved cluster."""
+        return self._event_state_directory / "last_time.txt"
 
     @staticmethod
     def _derive_rsc_base_url(access_token_uri: str) -> str:
@@ -595,6 +607,7 @@ class RubrikRscApi:
 
     def save_last_check(self, timestamp: str, object):
         try:
+            self._event_state_directory.mkdir(parents=True, exist_ok=True)
             with open(self.last_time_file, "w", encoding="utf-8") as f:
                 f.write(timestamp)
             with open(self.last_checked_file, "w", encoding="utf-8") as f:
