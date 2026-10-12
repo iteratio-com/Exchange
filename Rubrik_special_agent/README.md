@@ -106,6 +106,6 @@ Thanks to **Sebastian Häger** ([Sebastian.Haeger@sva.de](mailto:Sebastian.Haege
 * 1.5.0 Switched the Rubrik special agent to RSC GraphQL-only mode, added mandatory cluster selection by cluster name or UUID, added secure password-store secret resolution, ensured RSC session tokens are deleted after use, enabled SSL certificate verification by default with explicit opt-out support, fixed degraded disk mapping for raidStatus values NONE and OPTIMAL, improved Node Hardware Health policy details, and fixed singleton section parsing for duplicate piggyback sources.
 * 1.5.1 Added Rubrik Bandwidth check
 * 1.5.2 Fixed the section list in the special agent rule
-* 1.5.3 Added Event Logwatch with filters, configurable request timeout, and SaaS-wide cluster monitoring with cluster piggyback hosts, contributed by Sebastian Häger (Sebastian.Haeger@sva.de) - #34
+* 1.5.3 Added Event Logwatch with filters, configurable request timeout, and SaaS-wide cluster monitoring with cluster piggyback hosts, contributed by Sebastian Häger (Sebastian.Haeger@sva.de)
 * 1.5.4 Code optimization and bug fixes
 * 1.5.5 Fixed bandwidth query, restored Storage section selection with UNKNOWN handling for missing runway data, and hardened event handling with required filters and temporary state storage.
