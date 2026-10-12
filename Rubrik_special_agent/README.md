@@ -12,8 +12,9 @@ The agent connects via GraphQL to the Rubrik Service Cloud (RSC) and creates pig
 * Node Hardware Health
 * Node Status (node-side)
 * Bandwidth
+* Logwatch (directly for the host and not via piggyback accessable)
 
-It is highly recommended to use the **Dynamic Host Configuration** to automatically create the nodes as hosts.
+It is highly recommended to use the **Dynamic Host Configuration** to automatically create the nodes as hosts. If "SaaS" is defined on special agent rule use the **Dynamic Host Configuration** to automatically create the nodes and clusters as hosts.
 
 ## Discovered labels
 
