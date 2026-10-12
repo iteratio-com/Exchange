@@ -2,35 +2,71 @@
 
 ## Function
 
-**IMPORTANT: Migration from CSM to RSC**
-The agent has been transitioned from the legacy CSM to the RSC GraphQL-only mode. Because of this architectural change, **existing rules must be recreated**.
+**IMPORTANT: Migration to RSC**
 
-The agent connects via GraphQL to the Rubrik Service Cloud (RSC) and creates piggyback data for nodes, including the following services:
+Since version 1.5.0, the agent uses Rubrik Security Cloud (RSC) GraphQL exclusively. Because of this architectural change, **existing rules for the legacy integration must be recreated**.
+
+The agent provides the following services:
+
 * Cluster System Status
 * Compliance 24 Hours (cluster-side)
 * Disk
 * Node Hardware Health
 * Node Status (node-side)
 * Bandwidth
-* Logwatch (directly for the host and not via piggyback accessable)
+* Storage Runway
+* Event Logwatch
 
-It is highly recommended to use the **Dynamic Host Configuration** to automatically create the nodes as hosts. If "SaaS" is defined on special agent rule use the **Dynamic Host Configuration** to automatically create the nodes and clusters as hosts.
+Monitor a single cluster by name or UUID, or select **SaaS** in the special agent rule to monitor all clusters visible to the service account.
+
+Node data is provided via piggyback. In SaaS mode, cluster hosts are also provided via piggyback. **Dynamic Host Configuration** is recommended to create these hosts automatically.
+
+### Event Logwatch
+
+Event Logwatch is reported on the querying host rather than via piggyback.
+
+At least one of the following event filters must be configured:
+
+* Severity
+* Activity types
+* Activity status
+* Object type
+
+Without a filter, Event Logwatch is disabled, even if the section is selected in the rule. This is intended to reduce the risk of lockouts caused by unfiltered event requests.
+
+Filter values can be identified by inspecting requests from the Rubrik SaaS Events page using the browser developer tools.
+
+### Storage Runway
+
+The configurable Storage section reports the estimated remaining capacity in days. Missing runway values result in **UNKNOWN** rather than being interpreted as zero days.
+
+### Connection settings
+
+The request timeout is configurable. SSL certificate verification is enabled by default and can be explicitly disabled in the special agent rule.
 
 ## Discovered labels
 
-* Host label for cluster hosts -> `rubrikDevice:cluster`
-* Host label for nodes -> `rubrikDevice:node`
+* Cluster hosts: `rubrikDevice:cluster`
+* Node hosts: `rubrikDevice:node`
 
 ## Checkmk version compatibility
 
-* The (deprecated) version for 2.1.0 is `rubrik_agent-0.9.3.mkp`.
-* Current version for 2.2.0 is `rubrik_agent-1.2.3.mkp`.
-* Current version for 2.3.0 and 2.4.0 using instance based CDM is `rubrik_agent-1.4.3.mkp`.
-* Current version for 2.3.0 and 2.4.0 using cloud based RSC is `rubrik_agent-1.5.2.mkp`.
+Current development targets **Checkmk 2.5.0**.
+
+Earlier packages:
+
+* Checkmk 2.1.0: `rubrik_agent-0.9.3.mkp` (deprecated)
+* Checkmk 2.2.0: `rubrik_agent-1.2.3.mkp`
+* Checkmk 2.3.0 and 2.4.0 with instance-based CDM: `rubrik_agent-1.4.3.mkp`
+* Checkmk 2.3.0 and 2.4.0 with cloud-based RSC: `rubrik_agent-1.5.2.mkp`
 
 ## Thanks!
 
-Thanks to my colleague Mathias for supporting me by giving hints and and treating me to keep my code clean!
+Thanks to my colleague Mathias for his helpful suggestions and support in keeping the code clean.
+
+Thanks to **Leon Buhleier** ([Leon.Buhleier@sva.de](mailto:Leon.Buhleier@sva.de)) for contributing the metric translation fix for correct scaling of Rubrik Disk graphs.
+
+Thanks to **Sebastian Häger** ([Sebastian.Haeger@sva.de](mailto:Sebastian.Haeger@sva.de)) for contributing version 1.5.3: Event Logwatch with filters, configurable request timeout, and SaaS-wide cluster monitoring with cluster piggyback hosts.
 
 ## Changelog
 
@@ -66,7 +102,10 @@ Thanks to my colleague Mathias for supporting me by giving hints and and treatin
 * 1.4.1 Added a migration function for existing rulesets
 * 1.4.2 Refactored and cleaned up the code
 * 1.4.3 Set the minimum required Checkmk version to 2.3.0b1
-* 1.4.3-p1 Added graphing/rubrik.py for filesystem metric df_translation.
-* 1.5.0 Switched the Rubrik special agent to RSC GraphQL-only mode, added mandatory cluster selection by cluster name or UUID, added secure password-store secret resolution, ensured RSC session tokens are deleted after use, enabled SSL certificate verification by default with explicit opt-out support, fixed degraded disk mapping for raidStatus values None and OPTIMAL, improved Node Hardware Health policy details, and fixed singleton section parsing for duplicate piggyback sources.
+* 1.4.3-p1 Fixed Rubrik Disk graph scaling with filesystem metric translation, contributed by Leon Buhleier (Leon.Buhleier@sva.de)
+* 1.5.0 Switched the Rubrik special agent to RSC GraphQL-only mode, added mandatory cluster selection by cluster name or UUID, added secure password-store secret resolution, ensured RSC session tokens are deleted after use, enabled SSL certificate verification by default with explicit opt-out support, fixed degraded disk mapping for raidStatus values NONE and OPTIMAL, improved Node Hardware Health policy details, and fixed singleton section parsing for duplicate piggyback sources.
 * 1.5.1 Added Rubrik Bandwidth check
 * 1.5.2 Fixed the section list in the special agent rule
+* 1.5.3 Added Event Logwatch with filters, configurable request timeout, and SaaS-wide cluster monitoring with cluster piggyback hosts, contributed by Sebastian Häger (Sebastian.Haeger@sva.de) - #34
+* 1.5.4 Code optimization and bug fixes
+* 1.5.5 Fixed bandwidth query, restored Storage section selection with UNKNOWN handling for missing runway data, and hardened event handling with required filters and temporary state storage.
