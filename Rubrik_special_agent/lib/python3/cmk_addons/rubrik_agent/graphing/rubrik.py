@@ -33,12 +33,20 @@ from cmk.graphing.v1.metrics import (
 from cmk.graphing.v1.perfometers import Bidirectional, FocusRange, Open, Perfometer
 
 UNIT_BYTES_PER_SECOND = Unit(IECNotation("B/s"))
+UNIT_DAYS = Unit(DecimalNotation(""), StrictPrecision(0))
 
 metric_rubrik_bandwidth = Metric(
     name="rubrik_bandwidth",
     title=Title("Average archive bandwidth last hour"),
     unit=UNIT_BYTES_PER_SECOND,
     color=Color.PINK,
+)
+
+metric_rubrik_storage_runway_remaining = Metric(
+    name="rubrik_storage_runway_remaining",
+    title=Title("Runway remaining (days)"),
+    unit=UNIT_DAYS,
+    color=Color.ORANGE,
 )
 
 metric_rubrik_totalnodes = Metric(

@@ -24,7 +24,7 @@ def parse_rubrik_single(string_table: StringTable) -> RubrikSection:
     try:
         out = literal_eval("".join([i[0] for i in string_table]))
         return out if isinstance(out, dict) else {}
-    except ValueError:
+    except (ValueError, SyntaxError):
         return {}
 
 

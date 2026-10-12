@@ -29,7 +29,7 @@ class RubrikParams(BaseModel):
     sections: list[str] | None = None
 
 
-def _selector_arguments(params: RubrikParams) -> list[str]:
+def _selector_arguments(params: RubrikParams) -> list[str|bool]:
     if params.cluster_selector:
         selector_type, selector_value = params.cluster_selector
         if selector_type == "cluster_name":

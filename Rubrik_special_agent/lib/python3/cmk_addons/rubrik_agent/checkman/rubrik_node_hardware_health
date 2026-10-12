@@ -4,8 +4,16 @@ catalog: hw/storagehw/Rubrik
 license: GPLv3
 distribution: check_mk
 description:
- This check shows the status of FRUS (field replaceable units) and disks as reported by the node.
- As long as "All FRUS in the node are healthy" and no disk errors are reported, the check will return "OK", else "CRIT".
- The check monitors the hardware health of individual Rubrik nodes including components and disks.
+ This check monitors the hardware health policies reported for individual Rubrik nodes.
+ Healthy policies are {OK}; unhealthy policies are {CRIT} by default.
+ The ruleset "Rubrik Node Hardware Health" provides a selection of known policy names
+ for exceptions, for example {NETWORK_INTERFACE_CHECKER_PRIMARY}. An unhealthy policy
+ can be ignored or evaluated as {OK}, {WARN}, or {CRIT}. Healthy policies remain {OK}.
+ Ignored policies do not affect the service state. The worst state of the remaining
+ policies determines the service state. If all returned policies are ignored,
+ the service reports {OK} with an explicit summary. No returned policies results in {UNKNOWN}.
+ Original findings and messages remain visible in the details, together with any
+ configured ignore or state mapping. Duplicate policy names are not allowed in a rule.
+ Policies not included in the selection are still monitored and remain {CRIT} when unhealthy.
 inventory:
  One service is created per node.

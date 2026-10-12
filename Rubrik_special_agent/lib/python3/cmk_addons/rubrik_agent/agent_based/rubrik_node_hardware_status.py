@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+"""Monitor Rubrik hardware health with configurable policy exceptions."""
 
 from collections.abc import Mapping
 from typing import Any
@@ -11,101 +11,80 @@ from cmk.agent_based.v2 import (
     Result,
     Service,
     State,
-    StringTable,
 )
 
-from .utils.rubrik_api import RubrikSection
-
-
-def parse_rubrik_node_hardware_health(string_table: StringTable) -> RubrikSection:
-    out = {}
-    title = ""
-    last_key = {"SSD Life-Left": False}
-    for table_line in string_table:
-        line = table_line[0]
-        if len(line.split(":")) == 2 and line.split(":")[1]:  # noqa: PLR2004
-            key, value = line.split(":")
-            if value:
-                out[key.strip()] = value.strip()
-            continue
-        if line.startswith("Checking ") and line.endswith("for errors."):
-            title = line.split()[1] + "_errors"
-            out.setdefault(title, [])
-            last_key["SSD Life-Left"] = False
-            continue
-        if line.startswith("FRU Replacement Summary:"):
-            title = "FRU"
-            out.setdefault(title, [])
-            last_key["SSD Life-Left"] = False
-            continue
-        if line.startswith("-----"):
-            title = ""
-            last_key["SSD Life-Left"] = False
-            continue
-        if line.startswith("Disk Device") and line.endswith("SSD Life-Left"):
-            title = "SSD Life-Left"
-            out.setdefault(title, [])
-            last_key["SSD Life-Left"] = True
-            continue
-        if line.startswith("/dev/sd") and last_key["SSD Life-Left"]:
-            device = line.split("|")[0].strip()
-            percentage = line.split("|")[-1].strip()
-            out[title].append((device, percentage.replace("%", "").strip()))
-            continue
-        if title:
-            out[title].append(line.strip())
-
-        last_key["SSD Life-Left"] = False
-
-    return out
+from .utils.rubrik_api import RubrikSection, parse_rubrik_single
 
 
 agent_section_rubrik_node_hardware_health = AgentSection(
     name="rubrik_node_hardware_health",
-    parse_function=parse_rubrik_node_hardware_health,
+    parse_function=parse_rubrik_single,
 )
 
 
 def discover_node_hardware_health(section: RubrikSection) -> DiscoveryResult:
+    """Discover one hardware health service per node."""
     if section:
         yield Service()
 
 
-def check_node_hardware_health(params: Mapping[str, Any], section: RubrikSection) -> CheckResult:  # noqa: ARG001
+def check_node_hardware_health(params: Mapping[str, Any], section: RubrikSection) -> CheckResult:
+    """Evaluate policies while preserving original findings in the details."""
     if not section:
         return
 
-    if fru := section.get("FRU", []):
-        if "All FRUS in the node are healthy." in fru[0]:
-            yield Result(
-                state=State.OK,
-                summary="All FRUS in the node are healthy",
-            )
+    policies = section.get("policies") or []
+    if not policies:
+        yield Result(state=State.UNKNOWN, summary="No hardware health policies returned")
+        return
+
+    overrides: dict[str, str] = {
+        entry["policy_name"]: entry["handling"]
+        for entry in params.get("policy_overrides", [])
+    }
+    states = {"ok": State.OK, "warn": State.WARN, "crit": State.CRIT}
+    state = State.OK
+    healthy = unhealthy = ignored = 0
+    mapped: dict[str, int] = {}
+    details = []
+    for policy in policies:
+        policy_name = policy.get("policyName") or "unknown policy"
+        is_healthy = policy.get("isHealthy", True)
+        line = f"{policy_name}: {'healthy' if is_healthy else 'unhealthy'}"
+        if not is_healthy and policy.get("message"):
+            line += f" - {policy['message']}"
+        if is_healthy:
+            healthy += 1
+        elif (handling := overrides.get(policy_name, "crit")) == "ignore":
+            ignored += 1
+            line += " [ignored]"
         else:
-            yield Result(
-                state=State.CRIT,
-                summary=f"FRU in the node are not healthy {', '.join(fru)}",
-            )
+            unhealthy += 1
+            policy_state = states.get(handling, State.CRIT)
+            state = State.worst(state, policy_state)
+            if policy_name in overrides and handling in states:
+                line += f" [mapped to {policy_state.name}]"
+                mapped[policy_state.name] = mapped.get(policy_state.name, 0) + 1
+        details.append(line)
 
-    defect_disks = {"ok": [], "errors": []}
-
-    for partition in section:
-        if partition.startswith("sd") and partition.endswith("_errors"):
-            if len(section[partition]) != 0:
-                defect_disks["errors"].append(
-                    f"Errors on {partition.replace('_errors', '')}: {', '.join(section[partition])}",
-                )
-            else:
-                defect_disks["ok"].append(partition)
+    if ignored == len(policies):
+        summary = "All hardware health policies are ignored"
+    else:
+        summary = (
+            f"{healthy} hardware health policies are healthy"
+            if not unhealthy
+            else f"{unhealthy} hardware health policies are not healthy"
+        )
+        annotations = [f"{count} mapped to {name}" for name, count in mapped.items()]
+        if ignored:
+            annotations.append(f"{ignored} ignored")
+        if annotations:
+            summary += f" ({', '.join(annotations)})"
 
     yield Result(
-        state=State.CRIT if defect_disks["errors"] else State.OK,
-        details=(f"Defect disks: {', '.join(defect_disks['errors'])}" if defect_disks["errors"] else "No defect disks"),
-        summary=(
-            f"{len(defect_disks['ok'])} disks are okay"
-            if not defect_disks["errors"]
-            else "see errors of disks in details"
-        ),
+        state=state,
+        summary=summary,
+        details="\n".join(details),
     )
 
 
@@ -117,5 +96,6 @@ check_plugin_rubrik_node_hardware_health = CheckPlugin(
     check_ruleset_name="rubrik_node_hardware_status",
     check_default_parameters={
         "percent_ssd_life_left": (50, 10),
+        "policy_overrides": [],
     },
 )
