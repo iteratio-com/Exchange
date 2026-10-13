@@ -6,7 +6,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlparse, urlunparse
@@ -278,10 +278,11 @@ class RubrikRscApi:
         self.client_secret = _resolve_secret_reference(client_secret)
         self.token: str | None = None
         self.session = requests.Session()
-        self.session.headers.update({"accept": "application/json", "User-Agent": "CheckmkRubrikAgent/1.5.7"})
+        self.session.headers.update({"accept": "application/json", "User-Agent": "CheckmkRubrikAgent/1.5.8"})
         self.selected_cluster: dict[str, Any] | None = None
         self.timeout = timeout
         self.page_size = page_size
+        self._pending_event_states: dict[Path, tuple[str, dict[str, Any]]] = {}
 
         if not self.verify:
             urllib3.disable_warnings(InsecureRequestWarning)
@@ -605,15 +606,29 @@ class RubrikRscApi:
 
         return nodes
 
-    def save_last_check(self, timestamp: str, object):
+    def save_last_check(
+        self,
+        timestamp: str,
+        event: dict[str, Any],
+        *,
+        directory: Path | None = None,
+    ) -> None:
+        """Persist an event cursor in its host and cluster namespace."""
         try:
-            self._event_state_directory.mkdir(parents=True, exist_ok=True)
-            with open(self.last_time_file, "w", encoding="utf-8") as f:
+            state_directory = directory if directory is not None else self._event_state_directory
+            state_directory.mkdir(parents=True, exist_ok=True)
+            with open(state_directory / "last_time.txt", "w", encoding="utf-8") as f:
                 f.write(timestamp)
-            with open(self.last_checked_file, "w", encoding="utf-8") as f:
-                json.dump(object, f, ensure_ascii=False)
+            with open(state_directory / "last_checked.txt", "w", encoding="utf-8") as f:
+                json.dump(event, f, ensure_ascii=False)
         except Exception:
             pass
+
+    def commit_event_states(self) -> None:
+        """Persist fetched cursors only after the complete output has been flushed."""
+        for directory, (timestamp, event) in self._pending_event_states.items():
+            self.save_last_check(timestamp, event, directory=directory)
+        self._pending_event_states.clear()
     
     def get_last_check(self) -> tuple[Any, str]:
 
@@ -626,7 +641,7 @@ class RubrikRscApi:
                     pass
             with open(self.last_time_file, "r", encoding="utf-8") as f:
                 date_str = f.readline()
-                date_obj = datetime.strptime(date_str.split("T")[0], "%Y-%m-%d").date()
+                date_obj = _parse_event_timestamp(date_str).date()
 
                 if date_obj == date.today() or date_obj == date.today() - timedelta(days=1):
                     return (data_obj, date_str)
@@ -639,13 +654,14 @@ class RubrikRscApi:
         events: list[dict[str, Any]] = []
         after: str | None = None
         
-        filters = {}
         last_data, last_updated = self.get_last_check()
+        filters: dict[str, Any] = {
+            "clusterId": self.selected_cluster_uuid,
+            "lastUpdatedTimeGt": last_updated,
+        }
         last_entry = {}
-        newest_timestamp = datetime.strptime(last_updated, "%Y-%m-%dT%H:%M:%S.%fZ")
+        newest_timestamp = _parse_event_timestamp(last_updated)
 
-        if self.selected_cluster_uuid:
-            filters["clusterId"] = self.selected_cluster_uuid
         if last_activity_types:
             filters["lastActivityType"] = last_activity_types
         if lastactivitystatus:
@@ -654,8 +670,6 @@ class RubrikRscApi:
             filters["objectType"] = objecttype
         if severity:
             filters["severity"] = severity
-        if last_updated:
-            filters["lastUpdatedTimeGt"] = last_updated
 
 
         while True:
@@ -669,7 +683,9 @@ class RubrikRscApi:
             )
             connection = result.get("activitySeriesConnection") or {}
             for node in connection.get("edges") or []:
-                entry = node.get("node")
+                entry = (node or {}).get("node")
+                if not entry:
+                    continue
                 events.append(
                     {
                         "id": entry.get("activitySeriesId"),
@@ -683,10 +699,8 @@ class RubrikRscApi:
                     }
                 )
                 if entry.get("lastUpdated"):
-                    lastUpdated = datetime.strptime(entry.get("lastUpdated"), "%Y-%m-%dT%H:%M:%S.%fZ")
-                    if newest_timestamp >= lastUpdated:
-                        pass
-                    else:
+                    lastUpdated = _parse_event_timestamp(entry["lastUpdated"])
+                    if lastUpdated > newest_timestamp:
                         newest_timestamp = lastUpdated
                         last_entry = {
                         "id": entry.get("activitySeriesId"),
@@ -704,11 +718,29 @@ class RubrikRscApi:
             after = page_info.get("endCursor")
             if not after:
                 break
-        if newest_timestamp != datetime.strptime(last_updated, "%Y-%m-%dT%H:%M:%S.%fZ"):
-            self.save_last_check(newest_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z", last_entry)
-        if len(events) == 1 and events[0] == last_data:
-            return []
-        return events
+        if newest_timestamp != _parse_event_timestamp(last_updated):
+            self._pending_event_states[self._event_state_directory] = (
+                newest_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                last_entry,
+            )
+        return [] if len(events) == 1 and events[0] == last_data else events
+
+def _parse_event_timestamp(timestamp: str) -> datetime:
+    """Accept ISO-8601 fractions and offsets, treating naive timestamps as UTC."""
+    parsed = datetime.fromisoformat(timestamp.strip())
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _node_piggyback_name(node_id: object) -> str:
+    """Use the same local node ID for status, disk and hardware health data."""
+    name = str(node_id or "").rsplit(":::", 1)[-1]
+    if not name:
+        message = "Rubrik node data is missing its node ID"
+        raise RubrikApiError(message)
+    return name
+
 
 def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -810,21 +842,21 @@ def resolve_sections(args: argparse.Namespace, api: RubrikRscApi) -> None:
 
     if "node_status" in args.sections:
         for node in api.get_cluster_nodes_status():
-            print(f"<<<<{node.get('id')}>>>>")
+            print(f"<<<<{_node_piggyback_name(node.get('id'))}>>>>")
             print("<<<rubrik_node:sep(0)>>>")
             print(node)
             print("<<<<>>>>")
 
     if "node_disk_status" in args.sections:
         for disk in api.get_cluster_disk_status():
-            print(f"<<<<{str(disk.get('nodeId') or '').split(':::')[-1]}>>>>")
+            print(f"<<<<{_node_piggyback_name(disk.get('nodeId'))}>>>>")
             print("<<<rubrik_node_disk:sep(0)>>>")
             print(disk)
             print("<<<<>>>>")
 
     if "node_hardware_health" in args.sections:
         for node in api.get_cluster_node_hardware_health():
-            print(f"<<<<{node.get('hostname') or node.get('id')}>>>>")
+            print(f"<<<<{_node_piggyback_name(node.get('id'))}>>>>")
             print("<<<rubrik_node_hardware_health:sep(0)>>>")
             print(node)
             print("<<<<>>>>")
@@ -841,8 +873,10 @@ def resolve_cluster_section(args: argparse.Namespace, api: RubrikRscApi) -> None
         print(f"[[[Rubrik Events - {api.cluster_name}]]]")
         for data in api.get_cluster_events(args.event_lastactivitytype, args.event_severity, args.event_lastactivitystatus, args.event_objecttype):
             if len(data) != 0:
-                for message in data.get('message', {}).get('nodes', {}):
-                    print(f"{status_map.get(data.get('severity', '').lower(), status_map.get('fallback'))} {message.get('message')} ")
+                for message in (data.get('message') or {}).get('nodes') or []:
+                    if message is not None:
+                        severity = (data.get('severity') or '').lower()
+                        print(f"{status_map.get(severity, status_map['fallback'])} {message.get('message') or ''} ")
         print("<<<<>>>>")
 
 def main(argv: list[str] | None = None) -> int:
@@ -892,6 +926,8 @@ def main(argv: list[str] | None = None) -> int:
             resolve_sections(args, api)
             resolve_cluster_section(args, api)
 
+        sys.stdout.flush()
+
     except RubrikApiError as exc:
         sys.stderr.write(f"{exc}\n")
         exit_code = 1
@@ -900,6 +936,9 @@ def main(argv: list[str] | None = None) -> int:
         exit_code = 1
     finally:
         logout_rc = api.delete_token()
+
+    if not (exit_code or logout_rc):
+        api.commit_event_states()
 
     return exit_code or logout_rc
 

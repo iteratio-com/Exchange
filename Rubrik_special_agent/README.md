@@ -2,7 +2,7 @@
 
 ## Download
 
-Current version: **1.5.7** — [rubrik_agent-1.5.7.mkp](rubrik_agent-1.5.7.mkp).
+Current version: **1.5.8** — [rubrik_agent-1.5.8.mkp](rubrik_agent-1.5.8.mkp).
 
 ## Function
 
@@ -25,11 +25,15 @@ Monitor a single cluster by name or UUID, or select **SaaS** in the special agen
 
 Node data is provided via piggyback. In SaaS mode, cluster hosts are also provided via piggyback. **Dynamic Host Configuration** is recommended to create these hosts automatically.
 
+Since version 1.5.8, Node Status, Disk, and Node Hardware Health use the same node ID as their piggyback host name. After upgrading, rediscover services on the node ID hosts and review any existing hardware health hosts that were previously created using node hostnames.
+
 ### Event Logwatch
 
 Event Logwatch is reported on the querying host rather than via piggyback.
 
 Event state is stored separately for each querying host and cluster UUID, including when switching clusters in SaaS mode.
+
+Event cursors are saved only after the complete agent output has been flushed successfully and the RSC session has been closed successfully. Null event fields and ISO-8601 timestamps with or without fractional seconds or time zone offsets are handled.
 
 At least one of the following event filters must be configured:
 
@@ -70,7 +74,7 @@ Earlier packages:
 * Checkmk 2.1.0: `rubrik_agent-0.9.3.mkp` (deprecated)
 * Checkmk 2.2.0: `rubrik_agent-1.2.3.mkp`
 * Checkmk 2.3.0 and 2.4.0 with instance-based CDM: `rubrik_agent-1.4.3.mkp`
-* Checkmk 2.3.0 and 2.4.0 with cloud-based RSC: `rubrik_agent-1.5.7.mkp`
+* Checkmk 2.3.0 and 2.4.0 with cloud-based RSC: `rubrik_agent-1.5.8.mkp`
 
 ## Thanks!
 
@@ -123,3 +127,4 @@ Thanks to **Sebastian Häger** ([Sebastian.Haeger@sva.de](mailto:Sebastian.Haege
 * 1.5.5 Fixed bandwidth query, restored Storage section selection with UNKNOWN handling for missing runway data, and hardened event handling with required filters and temporary state storage.
 * 1.5.6 Added selectable hardware health policy exceptions (Ignore/OK/WARN/CRIT), preserved monitoring of other components, and clarified Event Logwatch filter requirements.
 * 1.5.7 Fixed Event Logwatch state isolation by querying host and cluster UUID, including SaaS cluster switching.
+* 1.5.8 Unified node piggyback IDs, deferred event cursor updates until successful output, handled null event fields and ISO-8601 timestamps, fixed duplicate cluster status parsing, and restored correct Disk graph scaling.

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+"""Define Rubrik graphs and translate filesystem metrics from MiB to bytes."""
 
 # +------------------------------------------------------------+
 # |                                                            |
@@ -20,6 +20,8 @@
 #                      by leon.buhleier@sva.de
 
 
+from importlib import import_module
+
 from cmk.graphing.v1 import Title
 from cmk.graphing.v1.graphs import Graph
 from cmk.graphing.v1.metrics import (
@@ -31,6 +33,41 @@ from cmk.graphing.v1.metrics import (
     Unit,
 )
 from cmk.graphing.v1.perfometers import Bidirectional, FocusRange, Open, Perfometer
+
+_MIB = 1024**2
+_FILESYSTEM_TRANSLATIONS = {
+    "fs_free": ("fs_free", _MIB),
+    "fs_size": ("fs_size", _MIB),
+    "fs_used": ("fs_used", _MIB),
+    "growth": ("fs_growth", _MIB),
+    "trend": ("fs_trend", _MIB),
+    "trend_hoursleft": ("trend_hoursleft", 3600),
+    "reserved": ("reserved", _MIB),
+    "uncommitted": ("uncommitted", _MIB),
+    "overprovisioned": ("overprovisioned", _MIB),
+}
+
+try:
+    from cmk.graphing.v1.translations import PassiveCheck, RenameToAndScaleBy, Translation
+except ImportError:
+    # Checkmk 2.3/2.4 have no public Translation API; use their legacy registry.
+    try:
+        _legacy_graphing = import_module("cmk.gui.graphing._legacy")
+    except ModuleNotFoundError:
+        _legacy_graphing = import_module("cmk.gui.graphing._utils")
+    _legacy_graphing.check_metrics["check_mk-rubrik_node_disk"] = {
+        name: {"name": target, "scale": scale}
+        for name, (target, scale) in _FILESYSTEM_TRANSLATIONS.items()
+    }
+else:
+    translation_rubrik_node_disk = Translation(
+        name="rubrik_node_disk",
+        check_commands=[PassiveCheck("rubrik_node_disk")],
+        translations={
+            name: RenameToAndScaleBy(target, scale)
+            for name, (target, scale) in _FILESYSTEM_TRANSLATIONS.items()
+        },
+    )
 
 UNIT_BYTES_PER_SECOND = Unit(IECNotation("B/s"))
 UNIT_DAYS = Unit(DecimalNotation(""), StrictPrecision(0))

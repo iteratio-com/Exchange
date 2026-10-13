@@ -1,7 +1,4 @@
-#!/usr/bin/env python3
-
-from ast import literal_eval
-from typing import Any
+"""Monitor Rubrik cluster status, tolerating duplicate piggyback entries."""
 
 from cmk.agent_based.v2 import (
     AgentSection,
@@ -13,19 +10,9 @@ from cmk.agent_based.v2 import (
     Result,
     Service,
     State,
-    StringTable,
 )
 
-RubrikSection = dict[str, Any]
-
-
-def parse_rubrik_single(string_table: StringTable) -> RubrikSection:
-    """Parse single rubrik cluster section."""
-    try:
-        out = literal_eval("".join([i[0] for i in string_table]))
-        return out if isinstance(out, dict) else {}
-    except (ValueError, SyntaxError):
-        return {}
+from .utils.rubrik_api import RubrikSection, parse_rubrik_single
 
 
 def host_label_rubrik_cluster(section: RubrikSection) -> HostLabelGenerator:
