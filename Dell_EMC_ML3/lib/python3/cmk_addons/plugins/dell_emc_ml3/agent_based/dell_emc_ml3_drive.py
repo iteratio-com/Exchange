@@ -1,26 +1,21 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-from typing import Any
 from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any
 
 from cmk.agent_based.v2 import (
-    Service,
-    Result,
-    exists,
-    State,
     CheckPlugin,
-    SimpleSNMPSection,
-    StringTable,
-    DiscoveryResult,
     CheckResult,
+    DiscoveryResult,
+    Result,
+    Service,
+    SimpleSNMPSection,
     SNMPTree,
+    State,
+    StringTable,
     check_levels,
+    exists,
     render,
 )
-
-
-from dataclasses import dataclass
 
 
 @dataclass
@@ -79,7 +74,7 @@ def check_dell_emc_ml3_drive(item: str, params: Mapping[str, Any], section) -> C
     status, txt = ava_map.get(drive.ava, (State.UNKNOWN, "unknown Status Code"))
     if params.get("ava_map"):
         status = params["ava_map"].get(f"ava_map_{drive.ava}")
-        status = State(status)
+        status = State(status if status is not None else State.UNKNOWN)
 
     yield Result(state=status, summary=f"availability State: {txt}")
 
@@ -123,7 +118,7 @@ def check_dell_emc_ml3_drive(item: str, params: Mapping[str, Any], section) -> C
     status, txt = op_status_map.get(drive.op_status, (State.UNKNOWN, "unknown status"))
     if params.get("opa_map"):
         status = params["opa_map"].get(f"opa_map_{drive.op_status}", status)
-        status = State(status)
+        status = State(status if status is not None else State.UNKNOWN)
     yield Result(state=status, summary=f"Operational Status: {txt}")
 
 

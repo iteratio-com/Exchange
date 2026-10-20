@@ -1,20 +1,15 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-
 from cmk.agent_based.v2 import (
-    Service,
-    Result,
-    exists,
-    State,
     CheckPlugin,
-    SimpleSNMPSection,
-    StringTable,
-    DiscoveryResult,
     CheckResult,
+    DiscoveryResult,
+    Result,
+    Service,
+    SimpleSNMPSection,
     SNMPTree,
+    State,
+    StringTable,
+    exists,
 )
-
 
 TAPE_SECTION = dict[str, tuple[str, str]]
 
@@ -35,10 +30,10 @@ def parse_dell_emc_ml3_drive_power_supply(string_table: StringTable) -> CheckRes
 
 
 def check_dell_emc_ml3_drive_power_supply(item: str, section: TAPE_SECTION) -> CheckResult:
-    if not section.get(item):
+    if not (data := section.get(item)):
         return
 
-    ps, serialno = section.get(item)
+    ps, serialno = data
 
     ps_map = {
         "1": (State.OK, "not installed"),

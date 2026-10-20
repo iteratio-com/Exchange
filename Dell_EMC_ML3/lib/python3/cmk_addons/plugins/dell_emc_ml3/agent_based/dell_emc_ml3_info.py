@@ -1,19 +1,16 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from typing import NamedTuple
 
 from cmk.agent_based.v2 import (
-    Service,
-    Result,
-    exists,
-    State,
     CheckPlugin,
-    SimpleSNMPSection,
-    StringTable,
-    DiscoveryResult,
     CheckResult,
+    DiscoveryResult,
+    Result,
+    Service,
+    SimpleSNMPSection,
     SNMPTree,
+    State,
+    StringTable,
+    exists,
 )
 
 
@@ -25,8 +22,8 @@ class Tape_Drive_Info(NamedTuple):
     element_name: str
 
 
-def parse_dell_tape_drive_info(string_table: StringTable) -> Tape_Drive_Info:
-    return Tape_Drive_Info(*string_table)
+def parse_dell_tape_drive_info(string_table: StringTable) -> Tape_Drive_Info | None:
+    return Tape_Drive_Info(*string_table) if string_table else None
 
 
 def check_dell_emc_ml3_info(section: Tape_Drive_Info) -> CheckResult:
@@ -35,8 +32,11 @@ def check_dell_emc_ml3_info(section: Tape_Drive_Info) -> CheckResult:
 
     yield Result(
         state=State.OK,
-        summary=f"Name: {section.name[0]}, IdentifyingNumber: {section.ident_number[0]}, Version: {section.version[0]}",
-        details=f"Name: {section.name[0]}, IdentifyingNumber: {section.ident_number[0]}, Vendor: {section.vendor[0]}, Version: {section.version[0]}, ElementName: {section.element_name[0]}",
+        summary=f"Name: {section.name[0]}, IdentifyingNumber: {section.ident_number[0]},"
+        f" Version: {section.version[0]}",
+        details=f"Name: {section.name[0]}, IdentifyingNumber: {section.ident_number[0]}, "
+        f"Vendor: {section.vendor[0]}, "
+        f"Version: {section.version[0]}, ElementName: {section.element_name[0]}",
     )
 
 
