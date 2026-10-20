@@ -1,0 +1,13 @@
+title: SAP MaxDB: Data volume utilization
+agents: linux, windows
+catalog: app/maxdb
+license: GPL
+distribution: check_mk
+description:
+ Monitors used and total data volume bytes, checks utilization thresholds and full-volume status.
+ Requires the MaxDB agent plugin with the maxdb_volumes module enabled.
+ Thresholds can be configured using the MaxDB extended monitoring ruleset.
+item:
+ Database name
+discovery:
+ One service is discovered for each database with the corresponding agent section.

@@ -1,0 +1,13 @@
+title: SAP MaxDB: SQL command performance
+agents: linux, windows
+catalog: app/maxdb
+license: GPL
+distribution: check_mk
+description:
+ Shows SQL statement counters as per-second rates. The current agent output contains only a sampled command, so values are not database-wide.
+ Requires the MaxDB agent plugin with the maxdb_performance module enabled.
+ Thresholds can be configured using the MaxDB extended monitoring ruleset.
+item:
+ Database name
+discovery:
+ One service is discovered for each database with the corresponding agent section.

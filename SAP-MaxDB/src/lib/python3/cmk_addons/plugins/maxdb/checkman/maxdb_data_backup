@@ -1,0 +1,13 @@
+title: SAP MaxDB: Data Backup
+agents: linux, windows
+catalog: app/maxdb
+license: GPL
+distribution: check_mk
+description:
+ Monitors the age, duration and most recent attempt of the data backup.
+ Uses the maxdb_backup_extended agent section and its own MaxDB Data Backup ruleset.
+ For correct results, the agent must provide a sufficiently complete backup history.
+item:
+ Database name
+discovery:
+ One service per database when the extended backup section is present.

@@ -1,0 +1,13 @@
+title: SAP MaxDB: Transaction runtime
+agents: linux, windows
+catalog: app/maxdb
+license: GPL
+distribution: check_mk
+description:
+ Checks the age of the sampled active transaction. Current agent data does not guarantee that this is the oldest transaction.
+ Requires the MaxDB agent plugin with the maxdb_transactions module enabled.
+ Thresholds can be configured using the MaxDB extended monitoring ruleset.
+item:
+ Database name
+discovery:
+ One service is discovered for each database with the corresponding agent section.
