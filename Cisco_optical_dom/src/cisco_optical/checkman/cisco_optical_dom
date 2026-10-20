@@ -1,0 +1,47 @@
+title: Cisco Optical DOM via CISCO-OPTICAL-MIB
+agents: snmp
+catalog: hw/network/cisco
+license: GPLv2
+distribution: community
+item: The item is the IOS XR optical pseudo-interface name, for example {Optics0/0/0/0}.
+description:
+ This check monitors Digital Optical Monitoring information exposed by Cisco
+ devices through CISCO-OPTICAL-MIB ({1.3.6.1.4.1.9.9.828}). It is intended for
+ Cisco IOS XR systems where optical DOM information is provided by this MIB.
+
+ The check monitors RX power and TX power per optical lane in dBm. Laser bias
+ values are intentionally not fetched or monitored.
+
+ RX/TX power values and the corresponding low/high thresholds are supplied by
+ Cisco in 1/100 dBm and are scaled by the check accordingly.
+
+ The device supplied RX/TX low/high thresholds are always shown in the service
+ details. If a threshold is not supplied by the router/transceiver, the detail
+ output explicitly states {not provided by device}. These controller thresholds
+ are read from CISCO-OPTICAL-MIB OIDs 1.3.6.1.4.1.9.9.828.1.1.2.1.7 through
+ 1.3.6.1.4.1.9.9.828.1.1.2.1.10.
+
+ By default the device supplied RX/TX thresholds are used for evaluation. A
+ Checkmk rule named {Cisco Optical DOM} can override the thresholds separately
+ for RX lower/upper and TX lower/upper levels. Custom Checkmk levels take
+ precedence over the values reported by CISCO-OPTICAL-MIB. Device thresholds
+ remain visible in the service details even when their use for evaluation is
+ disabled.
+
+ The laser status reported by CISCO-OPTICAL-MIB is evaluated only while the
+ associated real traffic interface is active. If that traffic interface is
+ down, DOM evaluation is skipped because the normal interface check is expected
+ to monitor the interface state.
+discovery:
+ IOS XR exposes DOM data on pseudo interfaces named {Optics0/0/0/x}. Their
+ IF-MIB state can remain up even if the corresponding traffic interface is
+ down. Therefore this check maps an Optics interface to the real interface with
+ the same port path, for example {Optics0/0/0/0} to
+ {HundredGigE0/0/0/0} or {FourHundredGigE0/0/0/0}.
+
+ By default a service is discovered only when this associated traffic interface
+ has both IF-MIB::ifAdminStatus and IF-MIB::ifOperStatus set to {up(1)}.
+
+ The rule {Cisco Optical DOM discovery} can disable this restriction. When the
+ option is disabled, optical controllers containing per-lane data are discovered
+ independently of the associated interface state.
