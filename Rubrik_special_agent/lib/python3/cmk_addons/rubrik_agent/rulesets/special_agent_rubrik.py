@@ -202,6 +202,15 @@ def _formspec() -> Dictionary:
                     help_text=Help("Timeout for each request"),
                 ),
             ),
+            "piggyback_hostname_translation": DictElement(
+                required=False,
+                parameter_form=BooleanChoice(
+                    title=Title("Piggyback translation from ID to Hostname"),
+                    label=Label("Piggyback translation from ID to Hostname"),
+                    help_text=Help("Use hostname for nodes instead of id."),
+                    prefill=DefaultValue(False),
+                ),
+            ),
         },
     )
 
