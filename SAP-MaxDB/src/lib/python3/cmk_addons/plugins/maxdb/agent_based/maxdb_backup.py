@@ -78,7 +78,7 @@ def discover_maxdb_backup(section: MaxDBBackupSection) -> DiscoveryResult:
 def check_maxdb_backup(
     item: str, params: Mapping[str, Any], section: MaxDBBackupSection
 ) -> CheckResult:
-    if not (data := section.get(item)):
+    if (data := section.get(item)) is None:
         return
 
     if not data.get("error_jobs"):

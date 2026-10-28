@@ -109,7 +109,7 @@ def check_maxdb_state(
                 if maxdb_data.get("AUTOSAVESTANDBY", "not set").lower() == "on"
                 else params.get("autosave", 0)
             ),
-            summary=f"Auto Save Standby: {data.get('AUTOSAVESTANDBY', 'not set')}",
+            summary=f"Auto Save Standby: {maxdb_data.get('AUTOSAVESTANDBY', 'not set')}",
         )
     else:
         yield Result(
