@@ -870,6 +870,10 @@ def resolve_sections(args: argparse.Namespace, api: RubrikRscApi) -> None:
             print("<<<<>>>>")
 
     if "node_disk_status" in args.sections:
+        if not hostname_id_map and args.piggyback_hostname_translation:
+            # Fallback if only disk status is used
+            for node in api.get_cluster_nodes_status():
+                hostname_id_map[_node_piggyback_name(node.get('id'))] = node.get('hostname')
         for disk in api.get_cluster_disk_status():
             if args.piggyback_hostname_translation and hostname_id_map.get(_node_piggyback_name(disk.get('nodeId'))) is not None:
                 print(f"<<<<{hostname_id_map.get(_node_piggyback_name(disk.get('nodeId')))}>>>>")

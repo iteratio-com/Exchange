@@ -207,7 +207,7 @@ def _formspec() -> Dictionary:
                 parameter_form=BooleanChoice(
                     title=Title("Piggyback translation from ID to Hostname for Nodes"),
                     label=Label("Piggyback translation from ID to Hostname for Nodes"),
-                    help_text=Help("Use hostname for nodes instead of id. This function is only working for node_disk_status if node_status or node_hardware_health is used. Fallback always is the ID."),
+                    help_text=Help("Use hostname for nodes instead of id."),
                     prefill=DefaultValue(False),
                 ),
             ),
