@@ -849,9 +849,9 @@ def resolve_sections(args: argparse.Namespace, api: RubrikRscApi) -> None:
 
     if "node_status" in args.sections:
         for node in api.get_cluster_nodes_status():
-            if args.piggyback_hostname_translation:
+            if args.piggyback_hostname_translation and _node_piggyback_name(node.get('hostname')) is not None:
                 print(f"<<<<{_node_piggyback_name(node.get('hostname'))}>>>>")
-                hostname_id_map[node.get('id')] = node.get('hostname')
+                hostname_id_map[_node_piggyback_name(node.get('id'))] = node.get('hostname')
             else:
                 print(f"<<<<{_node_piggyback_name(node.get('id'))}>>>>")
             print("<<<rubrik_node:sep(0)>>>")
@@ -860,9 +860,9 @@ def resolve_sections(args: argparse.Namespace, api: RubrikRscApi) -> None:
 
     if "node_hardware_health" in args.sections:
         for node in api.get_cluster_node_hardware_health():
-            if args.piggyback_hostname_translation:
+            if args.piggyback_hostname_translation and _node_piggyback_name(node.get('hostname')) is not None:
                 print(f"<<<<{_node_piggyback_name(node.get('hostname'))}>>>>")
-                hostname_id_map[node.get('id')] = node.get('hostname')
+                hostname_id_map[_node_piggyback_name(node.get('id'))] = node.get('hostname')
             else:
                 print(f"<<<<{_node_piggyback_name(node.get('id'))}>>>>")
             print("<<<rubrik_node_hardware_health:sep(0)>>>")
@@ -871,7 +871,7 @@ def resolve_sections(args: argparse.Namespace, api: RubrikRscApi) -> None:
 
     if "node_disk_status" in args.sections:
         for disk in api.get_cluster_disk_status():
-            if args.piggyback_hostname_translation:
+            if args.piggyback_hostname_translation and hostname_id_map.get(_node_piggyback_name(disk.get('nodeId'))) is not None:
                 print(f"<<<<{hostname_id_map.get(_node_piggyback_name(disk.get('nodeId')))}>>>>")
             else:
                 print(f"<<<<{_node_piggyback_name(disk.get('nodeId'))}>>>>")
