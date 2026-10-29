@@ -792,6 +792,12 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         help="Timeout value for each query (default: %(default)s)",
     )
     parser.add_argument(
+        "--piggyback-hostname-translation",
+        action="store_true",
+        required=False,
+        help="Use hostname for nodes instead of id. Default: False",
+    )
+    parser.add_argument(
         "--list-clusters",
         help="List all clusters visible in RSC and exit",
         action="store_true",
@@ -824,6 +830,7 @@ def _print_clusters(clusters: list[dict[str, Any]]) -> None:
         print(cluster)
 
 def resolve_sections(args: argparse.Namespace, api: RubrikRscApi) -> None:
+    hostname_id_map = {}
     if "cluster_system_status" in args.sections:
         print("<<<rubrik_cluster_system_status:sep(0)>>>")
         print(api.get_cluster_system_status())
@@ -842,24 +849,40 @@ def resolve_sections(args: argparse.Namespace, api: RubrikRscApi) -> None:
 
     if "node_status" in args.sections:
         for node in api.get_cluster_nodes_status():
-            print(f"<<<<{_node_piggyback_name(node.get('id'))}>>>>")
+            if args.piggyback_hostname_translation and _node_piggyback_name(node.get('hostname')) is not None:
+                print(f"<<<<{_node_piggyback_name(node.get('hostname'))}>>>>")
+                hostname_id_map[_node_piggyback_name(node.get('id'))] = node.get('hostname')
+            else:
+                print(f"<<<<{_node_piggyback_name(node.get('id'))}>>>>")
             print("<<<rubrik_node:sep(0)>>>")
             print(node)
             print("<<<<>>>>")
 
+    if "node_hardware_health" in args.sections:
+        for node in api.get_cluster_node_hardware_health():
+            if args.piggyback_hostname_translation and _node_piggyback_name(node.get('hostname')) is not None:
+                print(f"<<<<{_node_piggyback_name(node.get('hostname'))}>>>>")
+                hostname_id_map[_node_piggyback_name(node.get('id'))] = node.get('hostname')
+            else:
+                print(f"<<<<{_node_piggyback_name(node.get('id'))}>>>>")
+            print("<<<rubrik_node_hardware_health:sep(0)>>>")
+            print(node)
+            print("<<<<>>>>")
+
     if "node_disk_status" in args.sections:
+        if not hostname_id_map and args.piggyback_hostname_translation:
+            # Fallback if only disk status is used
+            for node in api.get_cluster_nodes_status():
+                hostname_id_map[_node_piggyback_name(node.get('id'))] = node.get('hostname')
         for disk in api.get_cluster_disk_status():
-            print(f"<<<<{_node_piggyback_name(disk.get('nodeId'))}>>>>")
+            if args.piggyback_hostname_translation and hostname_id_map.get(_node_piggyback_name(disk.get('nodeId'))) is not None:
+                print(f"<<<<{hostname_id_map.get(_node_piggyback_name(disk.get('nodeId')))}>>>>")
+            else:
+                print(f"<<<<{_node_piggyback_name(disk.get('nodeId'))}>>>>")
             print("<<<rubrik_node_disk:sep(0)>>>")
             print(disk)
             print("<<<<>>>>")
 
-    if "node_hardware_health" in args.sections:
-        for node in api.get_cluster_node_hardware_health():
-            print(f"<<<<{_node_piggyback_name(node.get('id'))}>>>>")
-            print("<<<rubrik_node_hardware_health:sep(0)>>>")
-            print(node)
-            print("<<<<>>>>")
 
 def resolve_cluster_section(args: argparse.Namespace, api: RubrikRscApi) -> None:
     if "cluster_event_logwatch" in args.sections:
