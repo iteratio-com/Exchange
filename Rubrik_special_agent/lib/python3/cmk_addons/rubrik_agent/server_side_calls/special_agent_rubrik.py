@@ -27,6 +27,7 @@ class RubrikParams(BaseModel):
     disable_ssl_verification: bool | None = None
     verify_ssl: bool | None = None
     sections: list[str] | None = None
+    piggyback_hostname_translation: bool | None = None
 
 
 def _selector_arguments(params: RubrikParams) -> list[str|bool]:
@@ -81,6 +82,8 @@ def _agent_arguments(params: RubrikParams, host_config: HostConfig) -> Iterator[
         args.extend(["--event-objecttype", params.event_filter_object_type])
     if params.timeout:
         args.extend(["--timeout", str(params.timeout)])
+    if params.piggyback_hostname_translation:
+        args.extend(["--piggyback-hostname-translation"])
 
     yield SpecialAgentCommand(command_arguments=args)
 
