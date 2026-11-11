@@ -849,9 +849,12 @@ def resolve_sections(args: argparse.Namespace, api: RubrikRscApi) -> None:
 
     if "node_status" in args.sections:
         for node in api.get_cluster_nodes_status():
-            if args.piggyback_hostname_translation and _node_piggyback_name(node.get('hostname')) is not None:
-                print(f"<<<<{_node_piggyback_name(node.get('hostname'))}>>>>")
-                hostname_id_map[_node_piggyback_name(node.get('id'))] = node.get('hostname')
+            hostname = node.get('hostname')
+            if hostname:
+                hostname = hostname.strip()
+            if args.piggyback_hostname_translation and hostname:
+                print(f"<<<<{_node_piggyback_name(hostname)}>>>>")
+                hostname_id_map[_node_piggyback_name(node.get('id'))] = hostname
             else:
                 print(f"<<<<{_node_piggyback_name(node.get('id'))}>>>>")
             print("<<<rubrik_node:sep(0)>>>")
@@ -860,9 +863,12 @@ def resolve_sections(args: argparse.Namespace, api: RubrikRscApi) -> None:
 
     if "node_hardware_health" in args.sections:
         for node in api.get_cluster_node_hardware_health():
-            if args.piggyback_hostname_translation and _node_piggyback_name(node.get('hostname')) is not None:
-                print(f"<<<<{_node_piggyback_name(node.get('hostname'))}>>>>")
-                hostname_id_map[_node_piggyback_name(node.get('id'))] = node.get('hostname')
+            hostname = node.get('hostname')
+            if hostname:
+                hostname = hostname.strip()
+            if args.piggyback_hostname_translation and hostname:
+                print(f"<<<<{_node_piggyback_name(hostname)}>>>>")
+                hostname_id_map[_node_piggyback_name(node.get('id'))] = hostname
             else:
                 print(f"<<<<{_node_piggyback_name(node.get('id'))}>>>>")
             print("<<<rubrik_node_hardware_health:sep(0)>>>")
@@ -873,12 +879,15 @@ def resolve_sections(args: argparse.Namespace, api: RubrikRscApi) -> None:
         if not hostname_id_map and args.piggyback_hostname_translation:
             # Fallback if only disk status is used
             for node in api.get_cluster_nodes_status():
-                hostname_id_map[_node_piggyback_name(node.get('id'))] = node.get('hostname')
+                hostname = node.get('hostname')
+                if hostname and hostname.strip():
+                    hostname_id_map[_node_piggyback_name(node.get('id'))] = hostname.strip()
         for disk in api.get_cluster_disk_status():
-            if args.piggyback_hostname_translation and hostname_id_map.get(_node_piggyback_name(disk.get('nodeId'))) is not None:
-                print(f"<<<<{hostname_id_map.get(_node_piggyback_name(disk.get('nodeId')))}>>>>")
+            node_id = _node_piggyback_name(disk["nodeId"])
+            if args.piggyback_hostname_translation and node_id in hostname_id_map:
+                print(f"<<<<{hostname_id_map[node_id]}>>>>")
             else:
-                print(f"<<<<{_node_piggyback_name(disk.get('nodeId'))}>>>>")
+                print(f"<<<<{node_id}>>>>")
             print("<<<rubrik_node_disk:sep(0)>>>")
             print(disk)
             print("<<<<>>>>")
